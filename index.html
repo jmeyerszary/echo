@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raport ECHO – system raportowania</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.4;
+        }
+        h1 { text-align: center; margin-bottom: 1em; }
+        h2 { margin-top: 1.5em; }
+        .form-container {
+            max-width: 900px;
+            margin: auto;
+            background: #f7f7f7;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .flex-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .flex-row label {
+            flex: 0 0 150px;
+            font-weight: bold;
+            margin-top: 6px;
+        }
+        .flex-row input, .flex-row select {
+            flex: 1;
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        textarea {
+            width: 100%;
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            resize: vertical;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 6px;
+            text-align: center;
+        }
+        th { background-color: #f0f0f0; }
+        .norm-row.out-of-range {
+            background-color: #ffd7d7;
+        }
+        #computed-metrics span { font-weight: bold; }
+        button {
+            padding: 10px 20px;
+            margin-top: 15px;
+            background: #0077cc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover { background: #005fa3; }
+    </style>
+</head>
+<body>
+<h1>Raport ECHO – system raportowania</h1>
+<div class="form-container">
+    <h2>Dane pacjenta</h2>
+    <div class="flex-row">
+        <label for="name">Imię i nazwisko</label>
+        <input type="text" id="name" placeholder="wprowadź imię i nazwisko" />
+    </div>
+    <div class="flex-row">
+        <label for="dob">Data urodzenia</label>
+        <input type="date" id="dob" />
+        <label for="age">lub wiek (lata)</label>
+        <input type="number" id="age" step="0.01" min="0" placeholder="np. 5.5" />
+    </div>
+    <div class="flex-row">
+        <label for="gender">Płeć</label>
+        <select id="gender">
+            <option value="male">M – chłopiec</option>
+            <option value="female">F – dziewczynka</option>
+        </select>
+    </div>
+    <div class="flex-row">
+        <label for="weight">Waga (kg)</label>
+        <input type="number" id="weight" step="0.01" min="0" placeholder="np. 10.5" />
+        <label for="height">Wzrost (cm)</label>
+        <input type="number" id="height" step="0.1" min="0" placeholder="np. 80" />
+    </div>
+    <div id="computed-metrics">
+        <p>BMI: <span id="bmi"></span>; BSA: <span id="bsa"></span></p>
+        <p>Z-score wzrostu: <span id="height_z"></span>; Z-score wagi: <span id="weight_z"></span>; Z-score BMI: <span id="bmi_z"></span></p>
+    </div>
+    <div id="weight-info"></div>
+    <h2>Normy wagowe i pomiary ECHO</h2>
+    <table id="measureTable">
+        <thead>
+            <tr>
+                <th>Parametr</th>
+                <th>Min</th>
+                <th>Średnia</th>
+                <th>Maks</th>
+                <th>Wartość zmierzona</th>
+            </tr>
+        </thead>
+        <tbody id="measureBody"></tbody>
+    </table>
+    <h2>TAPSE</h2>
+    <div class="flex-row">
+        <label for="tapseValue">TAPSE (mm)</label>
+        <input type="number" id="tapseValue" step="0.1" placeholder="np. 15" />
+    </div>
+    <div id="tapse-norm-info"></div>
+    <h2>Wywiad</h2>
+    <textarea id="wywiad" rows="4">Skierowano z powodu szmeru nad sercem w badaniu pediatrycznym.
+C P SN w HBD bez powikłań. M.ur. g, Apgar . Zjada chętnie, nie męczy się. Nie obserwowano niepokojących objawów. Rozwija się prawidłowo, nie choruje przewlekle.
+Neguje omdlenia, zasłabnięcia, bóle w klatce piersiowej, kołatania serca. Wydolność fizyczna dobra.</textarea>
+    <h2>Badanie</h2>
+    <textarea id="badanie" rows="3">Stan ogólny dobry. Sinica (-), duszność (-), obrzęki (-), szmer (-), tętno udowe (+), wątroba (-), śledziona (-), płuca (-), infekcja (-), gorączka (-).</textarea>
+    <h2>Opis ECHO</h2>
+    <textarea id="opisEcho" rows="4">Opis badania ECHO: ...</textarea>
+    <button id="generateReport">Generuj raport</button>
+    <h2>Raport końcowy</h2>
+    <textarea id="finalReport" rows="12"></textarea>
+</div>
+
+<!-- Load normative datasets from separate files -->
+<script src="normative_data.js"></script>
+<script src="palczewska_data.js"></script>
+<script src="tapse_data.js"></script>
+
+    <!-- Bridge dataset constants to window properties to ensure availability across scripts -->
+    <script>
+        // If the constants exist (declared in loaded scripts), assign them to window so they are accessible globally
+        try {
+            if (typeof normativeData !== 'undefined') window.normativeData = normativeData;
+        } catch (e) {}
+        try {
+            if (typeof palczData !== 'undefined') window.palczData = palczData;
+        } catch (e) {}
+        try {
+            if (typeof tapseData !== 'undefined') window.tapseData = tapseData;
+        } catch (e) {}
+    </script>
+
+<script>
+// Object to hold user-entered measurement values
+let measuredValues = {};
+
+// Utility to find nearest numeric key as string
+function findNearestKey(target, keys) {
+    let nearest = keys[0];
+    let minDiff = Math.abs(target - parseFloat(nearest));
+    for (const k of keys) {
+        const diff = Math.abs(target - parseFloat(k));
+        if (diff < minDiff) {
+            nearest = k;
+            minDiff = diff;
+        }
+    }
+    return nearest;
+}
+
+// Compute age in years from date string
+function computeAgeFromDOB(dateStr) {
+    if (!dateStr) return null;
+    const dob = new Date(dateStr);
+    const today = new Date();
+    const diff = today - dob;
+    const years = diff / (365.25 * 24 * 3600 * 1000);
+    return years;
+}
+
+// BMI and BSA calculations
+function computeBMI(weight, height) {
+    if (!weight || !height) return null;
+    const h = height / 100;
+    return weight / (h * h);
+}
+function computeBSA(weight, height) {
+    if (!weight || !height) return null;
+    return 0.007184 * Math.pow(weight, 0.425) * Math.pow(height, 0.725);
+}
+
+// Z-score calculation
+function computeZ(value, mean, sd) {
+    if (mean == null || sd == null || sd === 0) return null;
+    return (value - mean) / sd;
+}
+
+// Update BMI, BSA and growth z-scores
+function updateBMIandZScores() {
+    const weightVal = parseFloat(document.getElementById('weight').value);
+    const heightVal = parseFloat(document.getElementById('height').value);
+    let ageVal;
+    const dobVal = document.getElementById('dob').value;
+    const ageInputVal = document.getElementById('age').value;
+    if (dobVal) {
+        ageVal = computeAgeFromDOB(dobVal);
+        document.getElementById('age').value = ageVal ? ageVal.toFixed(2) : '';
+    } else if (ageInputVal) {
+        ageVal = parseFloat(ageInputVal);
+    } else {
+        ageVal = null;
+    }
+    const gender = document.getElementById('gender').value;
+    const bmi = computeBMI(weightVal, heightVal);
+    const bsa = computeBSA(weightVal, heightVal);
+    document.getElementById('bmi').textContent = bmi ? bmi.toFixed(2) : '';
+    document.getElementById('bsa').textContent = bsa ? bsa.toFixed(2) : '';
+    let heightZ = '', weightZ = '', bmiZ = '';
+    if (ageVal != null && gender && weightVal && heightVal) {
+        const palKeys = Object.keys(palczData.data);
+        if (palKeys.length > 0) {
+            const nearestAge = palKeys.includes(ageVal.toString()) ? ageVal.toString() : findNearestKey(ageVal, palKeys);
+            const norm = palczData.data[nearestAge][gender];
+            heightZ = computeZ(heightVal, norm.height_mean, norm.height_sd);
+            weightZ = computeZ(weightVal, norm.weight_mean, norm.weight_sd);
+            const bmiMean = norm.bmi_mean;
+            const bmiSd = norm.bmi_sd;
+            bmiZ = computeZ(bmi, bmiMean, bmiSd);
+        }
+    }
+    document.getElementById('height_z').textContent = heightZ ? heightZ.toFixed(2) : '';
+    document.getElementById('weight_z').textContent = weightZ ? weightZ.toFixed(2) : '';
+    document.getElementById('bmi_z').textContent = bmiZ ? bmiZ.toFixed(2) : '';
+    updateTapseNorm();
+    updateMeasurementHighlight();
+}
+
+// Populate normative echocardiographic ranges based on weight
+function updateWeightNorms() {
+    const weightInputVal = document.getElementById('weight').value;
+    const tableBody = document.getElementById('measureBody');
+    tableBody.innerHTML = '';
+    if (!weightInputVal) {
+        document.getElementById('weight-info').textContent = '';
+        return;
+    }
+    const weightNum = parseFloat(weightInputVal);
+    const weightKeys = Object.keys(normativeData.data);
+    if (weightKeys.length === 0) return;
+    const nearest = weightKeys.includes(weightInputVal.toString()) ? weightInputVal.toString() : findNearestKey(weightNum, weightKeys);
+    const norms = normativeData.data[nearest];
+    document.getElementById('weight-info').textContent = `Wyświetlane normy dla wagi ${nearest} kg (najbliższa podanej: ${weightInputVal} kg)`;
+    for (const param in norms) {
+        const row = document.createElement('tr');
+        row.className = 'norm-row';
+        const paramTd = document.createElement('td');
+        paramTd.textContent = param;
+        const minTd = document.createElement('td');
+        minTd.textContent = norms[param].min;
+        const avgTd = document.createElement('td');
+        avgTd.textContent = norms[param].avr;
+        const maxTd = document.createElement('td');
+        maxTd.textContent = norms[param].max;
+        const valueTd = document.createElement('td');
+        const inputEl = document.createElement('input');
+        inputEl.type = 'number';
+        inputEl.step = '0.1';
+        inputEl.dataset.param = param;
+        inputEl.value = measuredValues[param] !== undefined && measuredValues[param] !== null ? measuredValues[param] : '';
+        inputEl.addEventListener('input', () => {
+            measuredValues[param] = inputEl.value ? parseFloat(inputEl.value) : null;
+            updateMeasurementHighlight();
+        });
+        valueTd.appendChild(inputEl);
+        row.appendChild(paramTd);
+        row.appendChild(minTd);
+        row.appendChild(avgTd);
+        row.appendChild(maxTd);
+        row.appendChild(valueTd);
+        tableBody.appendChild(row);
+    }
+    updateMeasurementHighlight();
+}
+
+// Highlight measured values outside normative ranges
+function updateMeasurementHighlight() {
+    const weightInputVal = document.getElementById('weight').value;
+    if (!weightInputVal) return;
+    const weightNum = parseFloat(weightInputVal);
+    const weightKeys = Object.keys(normativeData.data);
+    if (weightKeys.length === 0) return;
+    const nearest = weightKeys.includes(weightInputVal.toString()) ? weightInputVal.toString() : findNearestKey(weightNum, weightKeys);
+    const norms = normativeData.data[nearest];
+    const rows = document.querySelectorAll('#measureBody tr');
+    rows.forEach(row => {
+        const param = row.children[0].textContent;
+        const min = norms[param].min;
+        const max = norms[param].max;
+        const inputEl = row.querySelector('input');
+        const val = inputEl.value ? parseFloat(inputEl.value) : null;
+        if (val != null && (val < min || val > max)) {
+            row.classList.add('out-of-range');
+        } else {
+            row.classList.remove('out-of-range');
+        }
+    });
+}
+
+// Update TAPSE normative info and z-score
+function updateTapseNorm() {
+    const tapseVal = document.getElementById('tapseValue').value ? parseFloat(document.getElementById('tapseValue').value) : null;
+    let ageVal;
+    const dobVal = document.getElementById('dob').value;
+    const ageInputVal = document.getElementById('age').value;
+    if (dobVal) {
+        ageVal = computeAgeFromDOB(dobVal);
+    } else if (ageInputVal) {
+        ageVal = parseFloat(ageInputVal);
+    }
+    const infoDiv = document.getElementById('tapse-norm-info');
+    infoDiv.textContent = '';
+    if (ageVal != null) {
+        const tapseKeys = Object.keys(tapseData.data);
+        if (tapseKeys.length > 0) {
+            const nearest = tapseKeys.includes(ageVal.toString()) ? ageVal.toString() : findNearestKey(ageVal, tapseKeys);
+            const norms = tapseData.data[nearest];
+            let text = `Norma TAPSE dla wieku ${parseFloat(nearest).toFixed(2)} lata: min ${norms.min}, średnia ${norms.mean}, max ${norms.max}`;
+            if (tapseVal != null) {
+                const z = computeZ(tapseVal, norms.mean, norms.sd);
+                text += `; Twój wynik: ${tapseVal}, z-score: ${z != null ? z.toFixed(2) : ''}`;
+            }
+            infoDiv.textContent = text;
+        }
+    }
+}
+
+// Compile final report
+function generateReport() {
+    const name = document.getElementById('name').value;
+    const dob = document.getElementById('dob').value;
+    const ageVal = document.getElementById('age').value;
+    const genderLabel = document.getElementById('gender').value === 'male' ? 'chłopiec' : 'dziewczynka';
+    const weight = document.getElementById('weight').value;
+    const height = document.getElementById('height').value;
+    const bmi = document.getElementById('bmi').textContent;
+    const bsa = document.getElementById('bsa').textContent;
+    const height_z = document.getElementById('height_z').textContent;
+    const weight_z = document.getElementById('weight_z').textContent;
+    const bmi_z = document.getElementById('bmi_z').textContent;
+    const wywiad = document.getElementById('wywiad').value;
+    const badanie = document.getElementById('badanie').value;
+    const opisEcho = document.getElementById('opisEcho').value;
+    let echoResults = '';
+    const weightKeys = Object.keys(normativeData.data);
+    const weightInputVal = document.getElementById('weight').value;
+    if (weightInputVal && weightKeys.length > 0) {
+        const nearest = weightKeys.includes(weightInputVal.toString()) ? weightInputVal.toString() : findNearestKey(parseFloat(weightInputVal), weightKeys);
+        const norms = normativeData.data[nearest];
+        for (const param in norms) {
+            const meas = measuredValues[param];
+            const min = norms[param].min;
+            const max = norms[param].max;
+            echoResults += `${param}: ${meas != null ? meas : ''} mm (norma ${min}–${max})\n`;
+        }
+    }
+    // TAPSE result string
+    const tapseVal = document.getElementById('tapseValue').value;
+    let tapseStr = '';
+    if (ageVal) {
+        const tapseKeys = Object.keys(tapseData.data);
+        if (tapseKeys.length > 0) {
+            const nearestAge = tapseKeys.includes(ageVal) ? ageVal : findNearestKey(parseFloat(ageVal), tapseKeys);
+            const normsT = tapseData.data[nearestAge];
+            const z = tapseVal ? computeZ(parseFloat(tapseVal), normsT.mean, normsT.sd) : null;
+            tapseStr = `TAPSE: ${tapseVal || ''} mm (norma ${normsT.min}–${normsT.max}, z-score: ${z != null ? z.toFixed(2) : ''})`;
+        }
+    }
+    let report = '';
+    report += `Pacjent: ${name}\nPłeć: ${genderLabel}\n`;
+    report += `Data urodzenia: ${dob || ''} • Wiek: ${ageVal || ''} lat\n`;
+    report += `Waga: ${weight || ''} kg • Wzrost: ${height || ''} cm • BMI: ${bmi || ''} (z-score: ${bmi_z || ''}) • BSA: ${bsa || ''}\n`;
+    report += `Z-score wzrostu: ${height_z || ''}, Z-score wagi: ${weight_z || ''}\n\n`;
+    report += `WYWIAD:\n${wywiad}\n\n`;
+    report += `BADANIE:\n${badanie}\n\n`;
+    report += `Wyniki ECHO:\n${echoResults.trim()}\n${tapseStr}\n\n`;
+    report += `OPIS ECHO:\n${opisEcho}\n`;
+    document.getElementById('finalReport').value = report;
+}
+
+// Event listeners
+document.getElementById('dob').addEventListener('change', updateBMIandZScores);
+document.getElementById('age').addEventListener('input', updateBMIandZScores);
+document.getElementById('gender').addEventListener('change', updateBMIandZScores);
+document.getElementById('weight').addEventListener('input', () => { updateBMIandZScores(); updateWeightNorms(); });
+document.getElementById('height').addEventListener('input', updateBMIandZScores);
+document.getElementById('tapseValue').addEventListener('input', updateTapseNorm);
+document.getElementById('generateReport').addEventListener('click', generateReport);
+
+// Initialize normative table on load
+window.addEventListener('load', () => {
+    updateWeightNorms();
+});
+</script>
+</body>
+</html>
