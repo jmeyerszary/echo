@@ -382,8 +382,8 @@ function generateReport() {
     let report = '';
     report += `Pacjent: ${name}\nPłeć: ${genderLabel}\n`;
     report += `Data urodzenia: ${dob || ''} • Wiek: ${ageVal || ''} lat\n`;
-    report += `Waga: ${weight || ''} kg • Wzrost: ${height || ''} cm • BMI: ${bmi || ''} (z-score: ${bmi_z || ''}) • BSA: ${bsa || ''}\n`;
-    report += `Z-score wzrostu: ${height_z || ''}, Z-score wagi: ${weight_z || ''}\n\n`;
+    report += `Waga: ${weight || ''} kg (Z-score: ${weight_z || ''}) • Wzrost: ${height || ''} cm (Z-score: ${height_z || ''})\n`;
+    report += `BMI: ${bmi || ''} kg/m2 (z-score: ${bmi_z || ''}) • BSA: ${bsa || ''} m2\n\n`;
     report += `WYWIAD:\n${wywiad}\n\n`;
     report += `BADANIE:\n${badanie}\n\n`;
     report += `Wyniki ECHO:\n${echoResults.trim()}\n${tapseStr}\n\n`;
