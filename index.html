@@ -192,6 +192,7 @@
             border: 1px solid var(--border);
             border-radius: 6px;
             background: var(--surface-2);
+            font-size: 0.88rem;
         }
         .template-option input {
             margin-top: 3px;
@@ -287,6 +288,8 @@
     <textarea id="wywiad" rows="4">Skierowano z powodu szmeru nad sercem w badaniu pediatrycznym.
 C P SN w HBD bez powikłań. M.ur. g, Apgar . Zjada chętnie, nie męczy się. Nie obserwowano niepokojących objawów. Rozwija się prawidłowo, nie choruje przewlekle.
 Neguje omdlenia, zasłabnięcia, bóle w klatce piersiowej, kołatania serca. Wydolność fizyczna dobra.</textarea>
+    <h2>Leki</h2>
+    <textarea id="leki" rows="2">nie przyjmuje</textarea>
     <h2>Badanie</h2>
     <textarea id="badanie" rows="3">Stan ogólny dobry. Sinica (-), duszność (-), obrzęki (-), szmer (-), tętno udowe (+), wątroba (-), śledziona (-), płuca (-), infekcja (-), gorączka (-).</textarea>
     <h2>EKG</h2>
@@ -341,6 +344,9 @@ let measuredValues = {};
 let recommendationSyncInProgress = false;
 let activeTemplateLines = {};
 
+const DEFAULT_EKG_TEXT = 'Rytm zatokowy, miarowy /min, oś pośrednia st, PQ ms, QRS ms, QT/QTc ms. QTc i ST-T w normie. Krzywa w normie.';
+const DEFAULT_MEDICATIONS_TEXT = 'nie przyjmuje';
+
 const recommendationTemplates = [
     {
         id: 'cardio-control',
@@ -359,6 +365,11 @@ Ewentualnie w razie potwierdzenia AS >200/min Holter EKG i ponowna konsultacja`
         id: 'holter',
         checked: false,
         text: 'Holter EKG'
+    },
+    {
+        id: 'medications',
+        checked: false,
+        text: 'Leki wg dotychczasowych zaleceń'
     },
     {
         id: 'poz',
@@ -479,10 +490,15 @@ function splitTextLines(text) {
     return text.split('\n').map(line => stripNumbering(line)).filter(Boolean);
 }
 
+function formatRecommendationLines(lines) {
+    if (lines.length <= 1) return lines.join('');
+    return lines.map((line, index) => `${index + 1}. ${line}`).join('\n');
+}
+
 function renumberRecommendations() {
     const textarea = document.getElementById('zalecenia');
     const lines = splitTextLines(textarea.value);
-    textarea.value = lines.map((line, index) => `${index + 1}. ${line}`).join('\n');
+    textarea.value = formatRecommendationLines(lines);
 }
 
 function removeTemplateLines(lines, templateLines) {
@@ -517,7 +533,7 @@ function syncRecommendationTemplates(changedTemplate = null, isChecked = null) {
         }
     }
 
-    textarea.value = lines.map((line, index) => `${index + 1}. ${line}`).join('\n');
+    textarea.value = formatRecommendationLines(lines);
     recommendationSyncInProgress = false;
 }
 
@@ -554,6 +570,24 @@ function refreshDynamicTemplates() {
             syncRecommendationTemplates(template, true);
         }
     });
+}
+
+function normalizeText(text) {
+    return text.trim().replace(/\s+/g, ' ');
+}
+
+function hasMedicationEntry() {
+    return normalizeText(document.getElementById('leki').value) !== normalizeText(DEFAULT_MEDICATIONS_TEXT);
+}
+
+function updateMedicationRecommendationTemplate() {
+    const template = recommendationTemplates.find(item => item.id === 'medications');
+    if (!template) return;
+    const shouldCheck = hasMedicationEntry();
+    if (template.checked === shouldCheck) return;
+    template.checked = shouldCheck;
+    syncRecommendationTemplates(template, shouldCheck);
+    renderRecommendationTemplates();
 }
 
 // Update BMI, BSA and growth z-scores
@@ -780,8 +814,10 @@ function collectReportData() {
         weight_centile: document.getElementById('weight_centile').textContent,
         bmi_centile: document.getElementById('bmi_centile').textContent,
         wywiad: document.getElementById('wywiad').value,
+        leki: document.getElementById('leki').value,
         badanie: document.getElementById('badanie').value,
         ekg: document.getElementById('ekg').value,
+        ekgChanged: normalizeText(document.getElementById('ekg').value) !== normalizeText(DEFAULT_EKG_TEXT),
         opisEcho: document.getElementById('opisEcho').value,
         zalecenia: document.getElementById('zalecenia').value,
         echoMeasurements,
@@ -805,8 +841,11 @@ function generateReport() {
     report += `Wzrost: ${data.height || ''} cm (Z-score: ${data.height_z || ''}, centyl: ${data.height_centile || ''}) • Waga: ${data.weight || ''} kg (Z-score: ${data.weight_z || ''}, centyl: ${data.weight_centile || ''})\n`;
     report += `BMI: ${data.bmi || ''} kg/m2 (Z-score: ${data.bmi_z || ''}, centyl: ${data.bmi_centile || ''}) • BSA: ${data.bsa || ''} m2\n\n`;
     report += `WYWIAD:\n${data.wywiad}\n\n`;
+    report += `LEKI:\n${data.leki}\n\n`;
     report += `BADANIE:\n${data.badanie}\n\n`;
-    report += `EKG:\n${data.ekg}\n\n`;
+    if (data.ekgChanged) {
+        report += `EKG:\n${data.ekg}\n\n`;
+    }
     report += `Wyniki ECHO:\n${echoResults.trim()}\n${tapseStr}\n\n`;
     report += `OPIS ECHO:\n${data.opisEcho}\n\n`;
     report += `ZALECENIA:\n${data.zalecenia}\n`;
@@ -840,6 +879,7 @@ function buildCsv() {
         rows.push(['echo_measurement', 'TAPSE', data.tapse.value, data.tapse.unit, `age ${data.tapse.norm_age_years} years`, data.tapse.norm_min, data.tapse.norm_mean, data.tapse.norm_max, data.tapse.z_score, '']);
     }
     rows.push(['text', 'wywiad', data.wywiad, '', '', '', '', '', '', '']);
+    rows.push(['text', 'leki', data.leki, '', '', '', '', '', '', '']);
     rows.push(['text', 'badanie', data.badanie, '', '', '', '', '', '', '']);
     rows.push(['text', 'ekg', data.ekg, '', '', '', '', '', '', '']);
     rows.push(['text', 'opis_echo', data.opisEcho, '', '', '', '', '', '', '']);
@@ -876,6 +916,7 @@ function initRecommendations() {
     } else {
         renumberRecommendations();
     }
+    updateMedicationRecommendationTemplate();
 }
 
 // Event listeners
@@ -885,6 +926,7 @@ document.getElementById('gender').addEventListener('change', updateBMIandZScores
 document.getElementById('weight').addEventListener('input', () => { updateBMIandZScores(); updateWeightNorms(); });
 document.getElementById('height').addEventListener('input', updateBMIandZScores);
 document.getElementById('tapseValue').addEventListener('input', updateTapseNorm);
+document.getElementById('leki').addEventListener('input', updateMedicationRecommendationTemplate);
 document.getElementById('zalecenia').addEventListener('blur', renumberRecommendations);
 document.getElementById('generateReport').addEventListener('click', generateReport);
 document.getElementById('generateAndCopy').addEventListener('click', generateAndCopyReport);
