@@ -149,6 +149,14 @@
             background-color: var(--danger);
             outline: 1px solid var(--danger-border);
         }
+        .norm-row.low {
+            background-color: rgba(37, 99, 235, 0.28);
+            outline: 1px solid #60a5fa;
+        }
+        .norm-row.high {
+            background-color: var(--danger);
+            outline: 1px solid var(--danger-border);
+        }
         #computed-metrics span { font-weight: bold; }
         button {
             padding: 8px 12px;
@@ -200,6 +208,15 @@
         .template-option span {
             white-space: pre-line;
         }
+        .inline-result {
+            color: var(--muted);
+            font-weight: bold;
+            margin: 8px 0 14px;
+        }
+        .small-table input[readonly] {
+            opacity: 0.82;
+            cursor: default;
+        }
         footer {
             max-width: 980px;
             margin: 12px auto;
@@ -208,6 +225,11 @@
         }
         @media (max-width: 720px) {
             body { padding: 8px; }
+            table {
+                display: block;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
             .app-header,
             .report-header {
                 align-items: stretch;
@@ -267,26 +289,60 @@
         </div>
     </div>
     <div id="weight-info"></div>
+    <div id="tapse-norm-info" class="hint"></div>
     <table id="measureTable">
         <thead>
             <tr>
-                <th>Parametr</th>
+                <th>Parametr [jedn.]</th>
                 <th>Min</th>
                 <th>Średnia</th>
                 <th>Maks</th>
                 <th>Wartość zmierzona</th>
+                <th>Z-score</th>
             </tr>
         </thead>
         <tbody id="measureBody"></tbody>
     </table>
+    <div id="teichholz-info" class="inline-result"></div>
+    <h2>Doppler [m/s]</h2>
+    <table id="dopplerTable" class="small-table">
+        <thead>
+            <tr>
+                <th>AV vmax</th>
+                <th>AV PG [mmHg]</th>
+                <th>PV vmax</th>
+                <th>PV PG [mmHg]</th>
+                <th>MV e</th>
+                <th>MV a</th>
+                <th>TV e</th>
+                <th>TV a</th>
+                <th>TI vmax</th>
+                <th>TI PG [mmHg]</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><input type="number" id="doppler_av_vmax" step="0.01" min="0" /></td>
+                <td><input type="text" id="doppler_av_pg" readonly tabindex="-1" /></td>
+                <td><input type="number" id="doppler_pv_vmax" step="0.01" min="0" /></td>
+                <td><input type="text" id="doppler_pv_pg" readonly tabindex="-1" /></td>
+                <td><input type="number" id="doppler_mv_e" step="0.01" min="0" /></td>
+                <td><input type="number" id="doppler_mv_a" step="0.01" min="0" /></td>
+                <td><input type="number" id="doppler_tv_e" step="0.01" min="0" /></td>
+                <td><input type="number" id="doppler_tv_a" step="0.01" min="0" /></td>
+                <td><input type="number" id="doppler_ti_vmax" step="0.01" min="0" /></td>
+                <td><input type="text" id="doppler_ti_pg" readonly tabindex="-1" /></td>
+            </tr>
+        </tbody>
+    </table>
+    <h2>Przyczyna skierowania</h2>
+    <div id="referralReasons" class="template-list"></div>
     <div class="flex-row">
-        <label for="tapseValue">TAPSE (mm)</label>
-        <input type="number" id="tapseValue" step="0.1" placeholder="np. 15" />
+        <label for="referralOther">Inna przyczyna</label>
+        <input type="text" id="referralOther" placeholder="krótki tekst" />
     </div>
-    <div id="tapse-norm-info"></div>
     <h2>Wywiad</h2>
-    <textarea id="wywiad" rows="4">Skierowano z powodu szmeru nad sercem w badaniu pediatrycznym.
-C P SN w HBD bez powikłań. M.ur. g, Apgar . Zjada chętnie, nie męczy się. Nie obserwowano niepokojących objawów. Rozwija się prawidłowo, nie choruje przewlekle.
+    <textarea id="wywiad" rows="4">Nie obserwowano niepokojących objawów. Rozwija się prawidłowo, nie choruje przewlekle.
 Neguje omdlenia, zasłabnięcia, bóle w klatce piersiowej, kołatania serca. Wydolność fizyczna dobra.</textarea>
     <h2>Leki</h2>
     <textarea id="leki" rows="2">nie przyjmuje</textarea>
@@ -341,11 +397,32 @@ Wn: Nie ma cech wady serca ani kardiomiopatii. Szmer niewinny.</textarea>
 <script>
 // Object to hold user-entered measurement values
 let measuredValues = {};
+let dopplerValues = {};
 let recommendationSyncInProgress = false;
 let activeTemplateLines = {};
+let activeInfantInterviewLine = false;
 
 const DEFAULT_EKG_TEXT = 'Rytm zatokowy, miarowy /min, oś pośrednia st, PQ ms, QRS ms, QT/QTc ms. QTc i ST-T w normie. Krzywa w normie.';
 const DEFAULT_MEDICATIONS_TEXT = 'nie przyjmuje';
+const INFANT_INTERVIEW_LINE = 'C P SN w HBD bez powikłań. M.ur. g, Apgar . Zjada chętnie, nie męczy się.';
+
+const referralReasonOptions = [
+    { id: 'murmur', text: 'szmer nad sercem w badaniu pediatrycznym', checked: true },
+    { id: 'syncope', text: 'omdlenie', checked: false },
+    { id: 'presyncope', text: 'stan przedomdleniowy', checked: false },
+    { id: 'chest-pain', text: 'ból w klatce piersiowej', checked: false },
+    { id: 'heart-defect', text: 'wada serca', checked: false }
+];
+
+const dopplerFields = [
+    { id: 'av_vmax', label: 'AV vmax', unit: 'm/s', pgId: 'av_pg' },
+    { id: 'pv_vmax', label: 'PV vmax', unit: 'm/s', pgId: 'pv_pg' },
+    { id: 'mv_e', label: 'MV e', unit: 'm/s' },
+    { id: 'mv_a', label: 'MV a', unit: 'm/s' },
+    { id: 'tv_e', label: 'TV e', unit: 'm/s' },
+    { id: 'tv_a', label: 'TV a', unit: 'm/s' },
+    { id: 'ti_vmax', label: 'TI vmax', unit: 'm/s', pgId: 'ti_pg' }
+];
 
 const recommendationTemplates = [
     {
@@ -590,6 +667,134 @@ function updateMedicationRecommendationTemplate() {
     renderRecommendationTemplates();
 }
 
+function renderReferralReasons() {
+    const container = document.getElementById('referralReasons');
+    container.innerHTML = '';
+    referralReasonOptions.forEach(reason => {
+        const label = document.createElement('label');
+        label.className = 'template-option';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = reason.checked;
+        checkbox.dataset.reasonId = reason.id;
+        checkbox.addEventListener('change', () => {
+            reason.checked = checkbox.checked;
+        });
+
+        const text = document.createElement('span');
+        text.textContent = reason.text;
+
+        label.appendChild(checkbox);
+        label.appendChild(text);
+        container.appendChild(label);
+    });
+}
+
+function getReferralReasons() {
+    const checkedReasons = referralReasonOptions
+        .filter(reason => reason.checked)
+        .map(reason => reason.text);
+    const otherReason = document.getElementById('referralOther').value.trim();
+    if (otherReason) checkedReasons.push(otherReason);
+    return checkedReasons;
+}
+
+function updateInfantInterviewLine() {
+    const ageVal = getAgeYears();
+    const textarea = document.getElementById('wywiad');
+    let lines = textarea.value.split('\n').map(line => line.trim()).filter(Boolean);
+    const hasLine = lines.includes(INFANT_INTERVIEW_LINE);
+    const shouldHaveLine = ageVal != null && ageVal < 2;
+
+    if (shouldHaveLine && !hasLine) {
+        lines.unshift(INFANT_INTERVIEW_LINE);
+        activeInfantInterviewLine = true;
+    } else if (!shouldHaveLine && hasLine && activeInfantInterviewLine) {
+        lines = lines.filter(line => line !== INFANT_INTERVIEW_LINE);
+        activeInfantInterviewLine = false;
+    }
+
+    textarea.value = lines.join('\n');
+}
+
+function getTapseNorm(ageVal = getAgeYears()) {
+    if (ageVal == null) return null;
+    const tapseKeys = Object.keys(tapseData.data);
+    if (tapseKeys.length === 0) return null;
+    const nearestAge = tapseKeys.includes(ageVal.toString()) ? ageVal.toString() : findNearestKey(ageVal, tapseKeys);
+    return {
+        nearestAge,
+        norms: tapseData.data[nearestAge]
+    };
+}
+
+function getMeasurementNormContext() {
+    const weightInputVal = document.getElementById('weight').value;
+    const weightKeys = Object.keys(normativeData.data).filter(key => key !== 'nan');
+    if (!weightInputVal || weightKeys.length === 0) return null;
+    const nearest = weightKeys.includes(weightInputVal.toString()) ? weightInputVal.toString() : findNearestKey(parseFloat(weightInputVal), weightKeys);
+    const norms = normativeData.data[nearest];
+    return { nearest, norms };
+}
+
+function getMeasurementFlag(value, min, max) {
+    if (value == null || Number.isNaN(value)) return '';
+    if (min != null && !Number.isNaN(min) && value < min) return 'L';
+    if (max != null && !Number.isNaN(max) && value > max) return 'H';
+    return '';
+}
+
+function computeTeichholzVolume(diameterMm) {
+    if (!diameterMm || Number.isNaN(diameterMm)) return null;
+    const diameterCm = diameterMm / 10;
+    return (7 * Math.pow(diameterCm, 3)) / (2.4 + diameterCm);
+}
+
+function computeTeichholz() {
+    const lvdD = measuredValues.LVDd;
+    const lvdS = measuredValues.LVDs;
+    if (!lvdD || !lvdS) return null;
+    const lvedv = computeTeichholzVolume(lvdD);
+    const lvesv = computeTeichholzVolume(lvdS);
+    if (lvedv == null || lvesv == null || lvedv === 0) return null;
+    const sv = lvedv - lvesv;
+    const lvef = (sv / lvedv) * 100;
+    return {
+        lvedv: Math.round(lvedv),
+        lvesv: Math.round(lvesv),
+        sv: Math.round(sv),
+        lvef: Math.round(lvef)
+    };
+}
+
+function updateTeichholzInfo() {
+    const result = computeTeichholz();
+    document.getElementById('teichholz-info').textContent = result
+        ? `Teichholz: LVEDV ${result.lvedv} ml, LVESV ${result.lvesv} ml, SV ${result.sv} ml, LVEF ${result.lvef}%`
+        : '';
+}
+
+function updateDopplerPg() {
+    ['av', 'pv', 'ti'].forEach(prefix => {
+        const vmax = parseFloat(document.getElementById(`doppler_${prefix}_vmax`).value);
+        const output = document.getElementById(`doppler_${prefix}_pg`);
+        output.value = vmax ? Math.round(4 * vmax * vmax) : '';
+    });
+}
+
+function collectDopplerData() {
+    return dopplerFields.map(field => {
+        const value = document.getElementById(`doppler_${field.id}`).value;
+        const pgValue = field.pgId ? document.getElementById(`doppler_${field.pgId}`).value : '';
+        return {
+            ...field,
+            value,
+            pgValue
+        };
+    }).filter(item => item.value);
+}
+
 // Update BMI, BSA and growth z-scores
 function updateBMIandZScores() {
     const weightVal = parseFloat(document.getElementById('weight').value);
@@ -619,6 +824,7 @@ function updateBMIandZScores() {
     document.getElementById('height_centile').textContent = formatCentileFromZ(heightZ);
     document.getElementById('weight_centile').textContent = formatCentileFromZ(weightZ);
     document.getElementById('bmi_centile').textContent = formatCentileFromZ(bmiZ);
+    updateInfantInterviewLine();
     updateTapseNorm();
     updateMeasurementHighlight();
     refreshDynamicTemplates();
@@ -626,93 +832,116 @@ function updateBMIandZScores() {
 
 // Populate normative echocardiographic ranges based on weight
 function updateWeightNorms() {
-    const weightInputVal = document.getElementById('weight').value;
     const tableBody = document.getElementById('measureBody');
     tableBody.innerHTML = '';
-    if (!weightInputVal) {
+
+    const context = getMeasurementNormContext();
+    if (context) {
+        document.getElementById('weight-info').textContent = `Wyświetlane normy dla wagi ${context.nearest} kg (najbliższa podanej: ${document.getElementById('weight').value} kg)`;
+        for (const param in context.norms) {
+            const norm = context.norms[param];
+            if (norm.min == null || Number.isNaN(norm.min)) continue;
+            appendMeasurementRow(param, 'mm', norm);
+        }
+    } else {
         document.getElementById('weight-info').textContent = '';
-        return;
     }
-    const weightNum = parseFloat(weightInputVal);
-    const weightKeys = Object.keys(normativeData.data);
-    if (weightKeys.length === 0) return;
-    const nearest = weightKeys.includes(weightInputVal.toString()) ? weightInputVal.toString() : findNearestKey(weightNum, weightKeys);
-    const norms = normativeData.data[nearest];
-    document.getElementById('weight-info').textContent = `Wyświetlane normy dla wagi ${nearest} kg (najbliższa podanej: ${weightInputVal} kg)`;
-    for (const param in norms) {
-        const row = document.createElement('tr');
-        row.className = 'norm-row';
-        const paramTd = document.createElement('td');
-        paramTd.textContent = param;
-        const minTd = document.createElement('td');
-        minTd.textContent = norms[param].min;
-        const avgTd = document.createElement('td');
-        avgTd.textContent = norms[param].avr;
-        const maxTd = document.createElement('td');
-        maxTd.textContent = norms[param].max;
-        const valueTd = document.createElement('td');
-        const inputEl = document.createElement('input');
-        inputEl.type = 'number';
-        inputEl.step = '0.1';
-        inputEl.dataset.param = param;
-        inputEl.value = measuredValues[param] !== undefined && measuredValues[param] !== null ? measuredValues[param] : '';
-        inputEl.addEventListener('input', () => {
-            measuredValues[param] = inputEl.value ? parseFloat(inputEl.value) : null;
-            updateMeasurementHighlight();
-        });
-        valueTd.appendChild(inputEl);
-        row.appendChild(paramTd);
-        row.appendChild(minTd);
-        row.appendChild(avgTd);
-        row.appendChild(maxTd);
-        row.appendChild(valueTd);
-        tableBody.appendChild(row);
-    }
+
+    appendTapseMeasurementRow();
     updateMeasurementHighlight();
+    updateTapseNorm();
+    updateTeichholzInfo();
+}
+
+function appendMeasurementRow(param, unit, norm, zScore = '') {
+    const row = document.createElement('tr');
+    row.className = 'norm-row';
+    row.dataset.param = param;
+    row.dataset.min = norm.min;
+    row.dataset.max = norm.max;
+
+    const paramTd = document.createElement('td');
+    paramTd.textContent = `${param} [${unit}]`;
+    const minTd = document.createElement('td');
+    minTd.textContent = norm.min;
+    const avgTd = document.createElement('td');
+    avgTd.textContent = norm.avr ?? norm.mean ?? '';
+    const maxTd = document.createElement('td');
+    maxTd.textContent = norm.max;
+    const valueTd = document.createElement('td');
+    const inputEl = document.createElement('input');
+    inputEl.type = 'number';
+    inputEl.step = '0.1';
+    inputEl.dataset.param = param;
+    inputEl.value = measuredValues[param] !== undefined && measuredValues[param] !== null ? measuredValues[param] : '';
+    inputEl.addEventListener('input', () => {
+        measuredValues[param] = inputEl.value ? parseFloat(inputEl.value) : null;
+        updateMeasurementHighlight();
+        updateTapseNorm();
+        updateTeichholzInfo();
+    });
+    valueTd.appendChild(inputEl);
+
+    const zTd = document.createElement('td');
+    zTd.className = 'z-score-cell';
+    zTd.textContent = zScore;
+
+    row.appendChild(paramTd);
+    row.appendChild(minTd);
+    row.appendChild(avgTd);
+    row.appendChild(maxTd);
+    row.appendChild(valueTd);
+    row.appendChild(zTd);
+    document.getElementById('measureBody').appendChild(row);
+}
+
+function appendTapseMeasurementRow() {
+    const tapseNorm = getTapseNorm();
+    if (!tapseNorm) return;
+    const tapseVal = measuredValues.TAPSE;
+    const z = tapseVal != null ? computeZ(tapseVal, tapseNorm.norms.mean, tapseNorm.norms.sd) : null;
+    appendMeasurementRow('TAPSE', 'mm', {
+        min: tapseNorm.norms.min,
+        mean: tapseNorm.norms.mean,
+        max: tapseNorm.norms.max
+    }, formatZ(z));
 }
 
 // Highlight measured values outside normative ranges
 function updateMeasurementHighlight() {
-    const weightInputVal = document.getElementById('weight').value;
-    if (!weightInputVal) return;
-    const weightNum = parseFloat(weightInputVal);
-    const weightKeys = Object.keys(normativeData.data);
-    if (weightKeys.length === 0) return;
-    const nearest = weightKeys.includes(weightInputVal.toString()) ? weightInputVal.toString() : findNearestKey(weightNum, weightKeys);
-    const norms = normativeData.data[nearest];
     const rows = document.querySelectorAll('#measureBody tr');
     rows.forEach(row => {
-        const param = row.children[0].textContent;
-        const min = norms[param].min;
-        const max = norms[param].max;
+        const min = parseFloat(row.dataset.min);
+        const max = parseFloat(row.dataset.max);
         const inputEl = row.querySelector('input');
         const val = inputEl.value ? parseFloat(inputEl.value) : null;
-        if (val != null && (val < min || val > max)) {
-            row.classList.add('out-of-range');
+        row.classList.remove('out-of-range', 'low', 'high');
+        if (val != null && val < min) {
+            row.classList.add('low');
+        } else if (val != null && val > max) {
+            row.classList.add('high');
         } else {
-            row.classList.remove('out-of-range');
+            row.classList.remove('low', 'high');
         }
     });
 }
 
 // Update TAPSE normative info and z-score
 function updateTapseNorm() {
-    const tapseVal = document.getElementById('tapseValue').value ? parseFloat(document.getElementById('tapseValue').value) : null;
-    const ageVal = getAgeYears();
+    const tapseVal = measuredValues.TAPSE != null ? measuredValues.TAPSE : null;
     const infoDiv = document.getElementById('tapse-norm-info');
     infoDiv.textContent = '';
-    if (ageVal != null) {
-        const tapseKeys = Object.keys(tapseData.data);
-        if (tapseKeys.length > 0) {
-            const nearest = tapseKeys.includes(ageVal.toString()) ? ageVal.toString() : findNearestKey(ageVal, tapseKeys);
-            const norms = tapseData.data[nearest];
-            let text = `Norma TAPSE dla wieku ${parseFloat(nearest).toFixed(2)} lata: min ${norms.min}, średnia ${norms.mean}, max ${norms.max}`;
-            if (tapseVal != null) {
-                const z = computeZ(tapseVal, norms.mean, norms.sd);
-                text += `; Twój wynik: ${tapseVal}, z-score: ${z != null ? z.toFixed(2) : ''}`;
-            }
-            infoDiv.textContent = text;
+    const tapseNorm = getTapseNorm();
+    if (tapseNorm) {
+        const norms = tapseNorm.norms;
+        let text = `Normy ECHO wg masy ciała lub dla wieku ${parseFloat(tapseNorm.nearestAge).toFixed(2)} lata (TAPSE): min ${norms.min}, średnia ${norms.mean}, max ${norms.max}`;
+        if (tapseVal != null) {
+            const z = computeZ(tapseVal, norms.mean, norms.sd);
+            text += `; TAPSE z-score: ${formatZ(z)}`;
+            const row = document.querySelector('#measureBody tr[data-param="TAPSE"] .z-score-cell');
+            if (row) row.textContent = formatZ(z);
         }
+        infoDiv.textContent = text;
     }
 }
 
@@ -759,43 +988,42 @@ function csvEscape(value) {
 function collectReportData() {
     const ageVal = document.getElementById('age').value;
     const genderLabel = document.getElementById('gender').value === 'male' ? 'chłopiec' : 'dziewczynka';
-    const weightKeys = Object.keys(normativeData.data);
-    const weightInputVal = document.getElementById('weight').value;
     const echoMeasurements = [];
-    if (weightInputVal && weightKeys.length > 0) {
-        const nearest = weightKeys.includes(weightInputVal.toString()) ? weightInputVal.toString() : findNearestKey(parseFloat(weightInputVal), weightKeys);
-        const norms = normativeData.data[nearest];
-        for (const param in norms) {
+
+    const context = getMeasurementNormContext();
+    if (context) {
+        for (const param in context.norms) {
+            const norm = context.norms[param];
+            const measured = measuredValues[param];
+            if (measured == null || norm.min == null || Number.isNaN(norm.min)) continue;
             echoMeasurements.push({
                 param,
-                measured: measuredValues[param] != null ? measuredValues[param] : '',
+                measured,
                 unit: 'mm',
-                norm_weight_kg: nearest,
-                norm_min: norms[param].min,
-                norm_avg: norms[param].avr,
-                norm_max: norms[param].max
+                norm_context: `weight ${context.nearest} kg`,
+                norm_min: norm.min,
+                norm_avg: norm.avr,
+                norm_max: norm.max,
+                z_score: '',
+                flag: getMeasurementFlag(measured, norm.min, norm.max)
             });
         }
     }
 
-    let tapse = {};
-    const tapseVal = document.getElementById('tapseValue').value;
-    if (ageVal) {
-        const tapseKeys = Object.keys(tapseData.data);
-        if (tapseKeys.length > 0) {
-            const nearestAge = tapseKeys.includes(ageVal) ? ageVal : findNearestKey(parseFloat(ageVal), tapseKeys);
-            const normsT = tapseData.data[nearestAge];
-            const z = tapseVal ? computeZ(parseFloat(tapseVal), normsT.mean, normsT.sd) : null;
-            tapse = {
-                value: tapseVal || '',
-                unit: 'mm',
-                norm_age_years: nearestAge,
-                norm_min: normsT.min,
-                norm_mean: normsT.mean,
-                norm_max: normsT.max,
-                z_score: formatZ(z)
-            };
-        }
+    const tapseNorm = getTapseNorm();
+    if (tapseNorm && measuredValues.TAPSE != null) {
+        const z = computeZ(measuredValues.TAPSE, tapseNorm.norms.mean, tapseNorm.norms.sd);
+        echoMeasurements.push({
+            param: 'TAPSE',
+            measured: measuredValues.TAPSE,
+            unit: 'mm',
+            norm_context: `age ${tapseNorm.nearestAge} years`,
+            norm_min: tapseNorm.norms.min,
+            norm_avg: tapseNorm.norms.mean,
+            norm_max: tapseNorm.norms.max,
+            z_score: formatZ(z),
+            flag: getMeasurementFlag(measuredValues.TAPSE, tapseNorm.norms.min, tapseNorm.norms.max)
+        });
     }
 
     return {
@@ -813,6 +1041,7 @@ function collectReportData() {
         height_centile: document.getElementById('height_centile').textContent,
         weight_centile: document.getElementById('weight_centile').textContent,
         bmi_centile: document.getElementById('bmi_centile').textContent,
+        referralReasons: getReferralReasons(),
         wywiad: document.getElementById('wywiad').value,
         leki: document.getElementById('leki').value,
         badanie: document.getElementById('badanie').value,
@@ -821,34 +1050,45 @@ function collectReportData() {
         opisEcho: document.getElementById('opisEcho').value,
         zalecenia: document.getElementById('zalecenia').value,
         echoMeasurements,
-        tapse
+        teichholz: computeTeichholz(),
+        doppler: collectDopplerData()
     };
 }
 
 // Compile final report
 function generateReport() {
     renumberRecommendations();
+    updateDopplerPg();
     const data = collectReportData();
     const echoResults = data.echoMeasurements
-        .map(item => `${item.param}: ${item.measured} ${item.unit} (norma ${item.norm_min}–${item.norm_max})`)
+        .map(item => `${item.param}: ${item.measured} ${item.unit}${item.flag ? ` ${item.flag}` : ''} (norma ${item.norm_min}–${item.norm_max}${item.z_score ? `, z-score: ${item.z_score}` : ''})`)
         .join('\n');
-    const tapseStr = data.tapse.value !== undefined
-        ? `TAPSE: ${data.tapse.value} mm (norma ${data.tapse.norm_min}–${data.tapse.norm_max}, z-score: ${data.tapse.z_score || ''})`
+    const teichholzStr = data.teichholz
+        ? `Teichholz: LVEDV ${data.teichholz.lvedv} ml, LVESV ${data.teichholz.lvesv} ml, SV ${data.teichholz.sv} ml, LVEF ${data.teichholz.lvef}%`
         : '';
+    const dopplerStr = data.doppler.map(item => {
+        const pg = item.pgValue ? `, PG ${item.pgValue} mmHg` : '';
+        return `${item.label}: ${item.value} ${item.unit}${pg}`;
+    }).join('\n');
     let report = '';
     report += `Pacjent: ${data.name}\nPłeć: ${data.gender}\n`;
     report += `Data urodzenia: ${data.dob || ''} • Wiek: ${data.age || ''} lat\n`;
     report += `Wzrost: ${data.height || ''} cm (Z-score: ${data.height_z || ''}, centyl: ${data.height_centile || ''}) • Waga: ${data.weight || ''} kg (Z-score: ${data.weight_z || ''}, centyl: ${data.weight_centile || ''})\n`;
     report += `BMI: ${data.bmi || ''} kg/m2 (Z-score: ${data.bmi_z || ''}, centyl: ${data.bmi_centile || ''}) • BSA: ${data.bsa || ''} m2\n\n`;
+    report += `Przyczyna skierowania: ${data.referralReasons.join(', ')}\n\n`;
     report += `WYWIAD:\n${data.wywiad}\n\n`;
     report += `LEKI:\n${data.leki}\n\n`;
     report += `BADANIE:\n${data.badanie}\n\n`;
     if (data.ekgChanged) {
         report += `EKG:\n${data.ekg}\n\n`;
     }
-    report += `Wyniki ECHO:\n${echoResults.trim()}\n${tapseStr}\n\n`;
+    report += `Wyniki ECHO:\n${[echoResults.trim(), teichholzStr].filter(Boolean).join('\n')}\n\n`;
+    if (dopplerStr) {
+        report += `DOPPLER:\n${dopplerStr}\n\n`;
+    }
     report += `OPIS ECHO:\n${data.opisEcho}\n\n`;
-    report += `ZALECENIA:\n${data.zalecenia}\n`;
+    report += `ZALECENIA:\n${data.zalecenia}\n\n`;
+    report += `Normy na podstawie źródeł: 1. Palczewska, 2. Koestenberger\n`;
     document.getElementById('finalReport').value = report;
     return report;
 }
@@ -862,29 +1102,36 @@ function buildCsv() {
     generateReport();
     const data = collectReportData();
     const rows = [
-        ['section', 'field', 'value', 'unit', 'norm_context', 'norm_min', 'norm_mean', 'norm_max', 'z_score', 'centile']
+        ['section', 'field', 'value', 'unit', 'norm_context', 'norm_min', 'norm_mean', 'norm_max', 'z_score', 'centile', 'flag']
     ];
-    rows.push(['patient', 'name', data.name, '', '', '', '', '', '', '']);
-    rows.push(['patient', 'dob', data.dob, '', '', '', '', '', '', '']);
-    rows.push(['patient', 'age', data.age, 'years', '', '', '', '', '', '']);
-    rows.push(['patient', 'gender', data.gender, '', '', '', '', '', '', '']);
-    rows.push(['anthropometry', 'height', data.height, 'cm', '', '', '', '', data.height_z, data.height_centile]);
-    rows.push(['anthropometry', 'weight', data.weight, 'kg', '', '', '', '', data.weight_z, data.weight_centile]);
-    rows.push(['anthropometry', 'BMI', data.bmi, 'kg/m2', '', '', '', '', data.bmi_z, data.bmi_centile]);
-    rows.push(['anthropometry', 'BSA', data.bsa, 'm2', '', '', '', '', '', '']);
+    rows.push(['patient', 'name', data.name, '', '', '', '', '', '', '', '']);
+    rows.push(['patient', 'dob', data.dob, '', '', '', '', '', '', '', '']);
+    rows.push(['patient', 'age', data.age, 'years', '', '', '', '', '', '', '']);
+    rows.push(['patient', 'gender', data.gender, '', '', '', '', '', '', '', '']);
+    rows.push(['patient', 'referral_reasons', data.referralReasons.join(', '), '', '', '', '', '', '', '', '']);
+    rows.push(['anthropometry', 'height', data.height, 'cm', '', '', '', '', data.height_z, data.height_centile, '']);
+    rows.push(['anthropometry', 'weight', data.weight, 'kg', '', '', '', '', data.weight_z, data.weight_centile, '']);
+    rows.push(['anthropometry', 'BMI', data.bmi, 'kg/m2', '', '', '', '', data.bmi_z, data.bmi_centile, '']);
+    rows.push(['anthropometry', 'BSA', data.bsa, 'm2', '', '', '', '', '', '', '']);
     data.echoMeasurements.forEach(item => {
-        rows.push(['echo_measurement', item.param, item.measured, item.unit, `weight ${item.norm_weight_kg} kg`, item.norm_min, item.norm_avg, item.norm_max, '', '']);
+        rows.push(['echo_measurement', item.param, item.measured, item.unit, item.norm_context, item.norm_min, item.norm_avg, item.norm_max, item.z_score, '', item.flag]);
     });
-    if (data.tapse.value !== undefined) {
-        rows.push(['echo_measurement', 'TAPSE', data.tapse.value, data.tapse.unit, `age ${data.tapse.norm_age_years} years`, data.tapse.norm_min, data.tapse.norm_mean, data.tapse.norm_max, data.tapse.z_score, '']);
+    if (data.teichholz) {
+        rows.push(['calculated', 'LVEDV', data.teichholz.lvedv, 'ml', 'Teichholz', '', '', '', '', '', '']);
+        rows.push(['calculated', 'LVESV', data.teichholz.lvesv, 'ml', 'Teichholz', '', '', '', '', '', '']);
+        rows.push(['calculated', 'SV', data.teichholz.sv, 'ml', 'Teichholz', '', '', '', '', '', '']);
+        rows.push(['calculated', 'LVEF', data.teichholz.lvef, '%', 'Teichholz', '', '', '', '', '', '']);
     }
-    rows.push(['text', 'wywiad', data.wywiad, '', '', '', '', '', '', '']);
-    rows.push(['text', 'leki', data.leki, '', '', '', '', '', '', '']);
-    rows.push(['text', 'badanie', data.badanie, '', '', '', '', '', '', '']);
-    rows.push(['text', 'ekg', data.ekg, '', '', '', '', '', '', '']);
-    rows.push(['text', 'opis_echo', data.opisEcho, '', '', '', '', '', '', '']);
-    rows.push(['text', 'zalecenia', data.zalecenia, '', '', '', '', '', '', '']);
-    rows.push(['text', 'final_report', document.getElementById('finalReport').value, '', '', '', '', '', '', '']);
+    data.doppler.forEach(item => {
+        rows.push(['doppler', item.label, item.value, item.unit, '', '', '', item.pgValue ? `PG ${item.pgValue} mmHg` : '', '', '', '']);
+    });
+    rows.push(['text', 'wywiad', data.wywiad, '', '', '', '', '', '', '', '']);
+    rows.push(['text', 'leki', data.leki, '', '', '', '', '', '', '', '']);
+    rows.push(['text', 'badanie', data.badanie, '', '', '', '', '', '', '', '']);
+    rows.push(['text', 'ekg', data.ekg, '', '', '', '', '', '', '', '']);
+    rows.push(['text', 'opis_echo', data.opisEcho, '', '', '', '', '', '', '', '']);
+    rows.push(['text', 'zalecenia', data.zalecenia, '', '', '', '', '', '', '', '']);
+    rows.push(['text', 'final_report', document.getElementById('finalReport').value, '', '', '', '', '', '', '', '']);
     return rows.map(row => row.map(csvEscape).join(',')).join('\n');
 }
 
@@ -919,13 +1166,22 @@ function initRecommendations() {
     updateMedicationRecommendationTemplate();
 }
 
+function initDoppler() {
+    dopplerFields.forEach(field => {
+        const input = document.getElementById(`doppler_${field.id}`);
+        input.addEventListener('input', () => {
+            dopplerValues[field.id] = input.value ? parseFloat(input.value) : null;
+            updateDopplerPg();
+        });
+    });
+}
+
 // Event listeners
-document.getElementById('dob').addEventListener('change', updateBMIandZScores);
-document.getElementById('age').addEventListener('input', updateBMIandZScores);
+document.getElementById('dob').addEventListener('change', () => { updateBMIandZScores(); updateWeightNorms(); });
+document.getElementById('age').addEventListener('input', () => { updateBMIandZScores(); updateWeightNorms(); });
 document.getElementById('gender').addEventListener('change', updateBMIandZScores);
 document.getElementById('weight').addEventListener('input', () => { updateBMIandZScores(); updateWeightNorms(); });
 document.getElementById('height').addEventListener('input', updateBMIandZScores);
-document.getElementById('tapseValue').addEventListener('input', updateTapseNorm);
 document.getElementById('leki').addEventListener('input', updateMedicationRecommendationTemplate);
 document.getElementById('zalecenia').addEventListener('blur', renumberRecommendations);
 document.getElementById('generateReport').addEventListener('click', generateReport);
@@ -939,6 +1195,8 @@ document.getElementById('themeToggle').addEventListener('click', () => {
 // Initialize normative table on load
 window.addEventListener('load', () => {
     initTheme();
+    renderReferralReasons();
+    initDoppler();
     initRecommendations();
     updateBMIandZScores();
     updateWeightNorms();
