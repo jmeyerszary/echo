@@ -3,22 +3,76 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Raport ECHO – system raportowania</title>
+    <title>System raportowania ECHO</title>
+    <link rel="icon" href="data:,">
     <style>
+        :root {
+            color-scheme: dark;
+            --bg: #0f172a;
+            --surface: #172033;
+            --surface-2: #1f2a44;
+            --text: #e5e7eb;
+            --muted: #a8b3c7;
+            --border: #334155;
+            --field: #0b1220;
+            --accent: #38bdf8;
+            --accent-strong: #0284c7;
+            --danger: #7f1d1d;
+            --danger-border: #ef4444;
+        }
+        body[data-theme="light"] {
+            color-scheme: light;
+            --bg: #eef2f7;
+            --surface: #ffffff;
+            --surface-2: #f1f5f9;
+            --text: #111827;
+            --muted: #526071;
+            --border: #cbd5e1;
+            --field: #ffffff;
+            --accent: #0369a1;
+            --accent-strong: #075985;
+            --danger: #fee2e2;
+            --danger-border: #ef4444;
+        }
         body {
             font-family: Arial, sans-serif;
-            margin: 20px;
+            margin: 0;
+            padding: 12px;
             line-height: 1.4;
+            background: var(--bg);
+            color: var(--text);
         }
-        h1 { text-align: center; margin-bottom: 1em; }
-        h2 { margin-top: 1.5em; }
+        h1 {
+            margin: 0;
+            font-size: 1.45rem;
+            letter-spacing: 0;
+        }
+        h2 {
+            margin: 1.1em 0 0.45em;
+            font-size: 1.05rem;
+        }
         .form-container {
-            max-width: 900px;
+            max-width: 980px;
             margin: auto;
-            background: #f7f7f7;
-            padding: 20px;
+            background: var(--surface);
+            padding: 14px;
             border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            box-shadow: 0 12px 30px rgba(0,0,0,0.22);
+        }
+        .app-header,
+        .report-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .report-header {
+            margin-top: 16px;
+            margin-bottom: 6px;
+        }
+        .report-header h2 {
+            margin: 0;
         }
         .flex-row {
             display: flex;
@@ -30,54 +84,149 @@
             flex: 0 0 150px;
             font-weight: bold;
             margin-top: 6px;
+            color: var(--muted);
         }
         .flex-row input, .flex-row select {
             flex: 1;
             padding: 6px;
-            border: 1px solid #ccc;
+            min-width: 150px;
+            color: var(--text);
+            background: var(--field);
+            border: 1px solid var(--border);
             border-radius: 4px;
         }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 8px;
+            margin: 10px 0;
+        }
+        .metric {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px;
+        }
+        .metric-label {
+            display: block;
+            color: var(--muted);
+            font-size: 0.82rem;
+        }
+        .metric-value {
+            font-weight: bold;
+        }
         textarea {
+            box-sizing: border-box;
             width: 100%;
             padding: 6px;
-            border: 1px solid #ccc;
+            color: var(--text);
+            background: var(--field);
+            border: 1px solid var(--border);
             border-radius: 4px;
             resize: vertical;
         }
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 15px;
+            margin-top: 8px;
         }
         th, td {
-            border: 1px solid #ddd;
+            border: 1px solid var(--border);
             padding: 6px;
             text-align: center;
         }
-        th { background-color: #f0f0f0; }
+        th { background-color: var(--surface-2); }
+        td input {
+            width: 100%;
+            box-sizing: border-box;
+            color: var(--text);
+            background: var(--field);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 5px;
+        }
         .norm-row.out-of-range {
-            background-color: #ffd7d7;
+            background-color: var(--danger);
+            outline: 1px solid var(--danger-border);
         }
         #computed-metrics span { font-weight: bold; }
         button {
-            padding: 10px 20px;
-            margin-top: 15px;
-            background: #0077cc;
+            padding: 8px 12px;
+            background: var(--accent);
             color: white;
             border: none;
             border-radius: 4px;
             cursor: pointer;
+            white-space: nowrap;
         }
-        button:hover { background: #005fa3; }
+        button:hover { background: var(--accent-strong); }
+        .secondary-button {
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+        .secondary-button:hover {
+            background: var(--surface-2);
+        }
+        .action-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .hint {
+            color: var(--muted);
+            font-size: 0.88rem;
+            margin: 4px 0 8px;
+        }
+        .template-list {
+            display: grid;
+            gap: 6px;
+            margin: 8px 0 14px;
+        }
+        .template-option {
+            display: grid;
+            grid-template-columns: 22px 1fr;
+            gap: 8px;
+            align-items: start;
+            padding: 8px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--surface-2);
+        }
+        .template-option input {
+            margin-top: 3px;
+        }
+        .template-option span {
+            white-space: pre-line;
+        }
+        footer {
+            max-width: 980px;
+            margin: 12px auto;
+            color: var(--muted);
+            font-size: 0.85rem;
+        }
+        @media (max-width: 720px) {
+            body { padding: 8px; }
+            .app-header,
+            .report-header {
+                align-items: stretch;
+                flex-direction: column;
+            }
+            .flex-row label {
+                flex-basis: 120px;
+            }
+        }
     </style>
 </head>
 <body>
-<h1>Raport ECHO – system raportowania</h1>
 <div class="form-container">
-    <h2>Dane pacjenta</h2>
+    <div class="app-header">
+        <h1>System raportowania ECHO</h1>
+        <button id="themeToggle" class="secondary-button" type="button">Tryb jasny</button>
+    </div>
     <div class="flex-row">
-        <label for="name">Imię i nazwisko</label>
-        <input type="text" id="name" placeholder="wprowadź imię i nazwisko" />
+        <label for="name">Nazwisko i imię</label>
+        <input type="text" id="name" placeholder="wprowadź nazwisko i imię" />
     </div>
     <div class="flex-row">
         <label for="dob">Data urodzenia</label>
@@ -93,17 +242,30 @@
         </select>
     </div>
     <div class="flex-row">
-        <label for="weight">Waga (kg)</label>
-        <input type="number" id="weight" step="0.01" min="0" placeholder="np. 10.5" />
         <label for="height">Wzrost (cm)</label>
         <input type="number" id="height" step="0.1" min="0" placeholder="np. 80" />
+        <label for="weight">Waga (kg)</label>
+        <input type="number" id="weight" step="0.01" min="0" placeholder="np. 10.5" />
     </div>
-    <div id="computed-metrics">
-        <p>BMI: <span id="bmi"></span>; BSA: <span id="bsa"></span></p>
-        <p>Z-score wzrostu: <span id="height_z"></span>; Z-score wagi: <span id="weight_z"></span>; Z-score BMI: <span id="bmi_z"></span></p>
+    <div id="computed-metrics" class="metrics-grid">
+        <div class="metric">
+            <span class="metric-label">BMI</span>
+            <span class="metric-value"><span id="bmi"></span> kg/m2</span>
+        </div>
+        <div class="metric">
+            <span class="metric-label">BSA</span>
+            <span class="metric-value"><span id="bsa"></span> m2</span>
+        </div>
+        <div class="metric">
+            <span class="metric-label">Z-score: wzrost / waga / BMI</span>
+            <span class="metric-value"><span id="height_z"></span> / <span id="weight_z"></span> / <span id="bmi_z"></span></span>
+        </div>
+        <div class="metric">
+            <span class="metric-label">Centyle: wzrost / waga / BMI</span>
+            <span class="metric-value"><span id="height_centile"></span> / <span id="weight_centile"></span> / <span id="bmi_centile"></span></span>
+        </div>
     </div>
     <div id="weight-info"></div>
-    <h2>Normy wagowe i pomiary ECHO</h2>
     <table id="measureTable">
         <thead>
             <tr>
@@ -116,7 +278,6 @@
         </thead>
         <tbody id="measureBody"></tbody>
     </table>
-    <h2>TAPSE</h2>
     <div class="flex-row">
         <label for="tapseValue">TAPSE (mm)</label>
         <input type="number" id="tapseValue" step="0.1" placeholder="np. 15" />
@@ -128,6 +289,8 @@ C P SN w HBD bez powikłań. M.ur. g, Apgar . Zjada chętnie, nie męczy się. N
 Neguje omdlenia, zasłabnięcia, bóle w klatce piersiowej, kołatania serca. Wydolność fizyczna dobra.</textarea>
     <h2>Badanie</h2>
     <textarea id="badanie" rows="3">Stan ogólny dobry. Sinica (-), duszność (-), obrzęki (-), szmer (-), tętno udowe (+), wątroba (-), śledziona (-), płuca (-), infekcja (-), gorączka (-).</textarea>
+    <h2>EKG</h2>
+    <textarea id="ekg" rows="3">Rytm zatokowy, miarowy /min, oś pośrednia st, PQ ms, QRS ms, QT/QTc ms. QTc i ST-T w normie. Krzywa w normie.</textarea>
     <h2>Opis ECHO</h2>
     <textarea id="opisEcho" rows="4">Ułożenie trzewi prawidłowe. Osierdzie wolne. 
 Spływy żylne do przedsionków prawidłowe. Wiązania przedsionkowo-komorowe i komorowo-naczyniowe zgodone. 
@@ -137,8 +300,19 @@ Odejście i początkowe przebiegi tt.wieńcowych prawidłowe. Łuk aorty prawid�
 W badaniu Dopplera przepływy przez zastawki, cieśń i Ao brzuszną prawidłowe. 
 Nie rejestruje się cech ASD, VSD, PDA ani CoAo. 
 Wn: Nie ma cech wady serca ani kardiomiopatii. Szmer niewinny.</textarea>
-    <button id="generateReport">Generuj raport</button>
-    <h2>Raport końcowy</h2>
+    <h2>Zalecenia</h2>
+    <textarea id="zalecenia" rows="5"></textarea>
+    <div class="hint">Zaznaczenie dodaje szablon, odznaczenie usuwa tylko niezmienione linie szablonowe. Ręczne dopiski zostają zachowane.</div>
+    <div id="recommendationTemplates" class="template-list"></div>
+    <div class="report-header">
+        <h2>Raport końcowy</h2>
+        <div class="action-row">
+            <button id="generateReport" type="button">Generuj</button>
+            <button id="generateAndCopy" type="button">Generuj do schowka</button>
+            <button id="downloadTxt" class="secondary-button" type="button">Pobierz txt</button>
+            <button id="downloadCsv" class="secondary-button" type="button">Pobierz csv</button>
+        </div>
+    </div>
     <textarea id="finalReport" rows="12"></textarea>
 </div>
 
@@ -164,6 +338,39 @@ Wn: Nie ma cech wady serca ani kardiomiopatii. Szmer niewinny.</textarea>
 <script>
 // Object to hold user-entered measurement values
 let measuredValues = {};
+let recommendationSyncInProgress = false;
+let activeTemplateLines = {};
+
+const recommendationTemplates = [
+    {
+        id: 'cardio-control',
+        checked: true,
+        text: 'Ewentualna kontrola kardiologiczna za 5 lat w razie utrzymywania się szmeru'
+    },
+    {
+        id: 'pulse-self-check',
+        checked: false,
+        text: `Samokontrola tętna, dzienniczek, przeszkolono
+W razie napadu - PILNE EKG (SOR, ZRM, POZ)
+Ponowna konsultacja po zarejestrowaniu artymii
+Ewentualnie w razie potwierdzenia AS >200/min Holter EKG i ponowna konsultacja`
+    },
+    {
+        id: 'holter',
+        checked: false,
+        text: 'Holter EKG'
+    },
+    {
+        id: 'poz',
+        checked: false,
+        text: 'Dalsza opieka w POZ'
+    },
+    {
+        id: 'vasovagal',
+        checked: false,
+        text: 'Profilaktyka omdleń wazowagalnych: • Przyjmowanie zwiększonej ilości płynów - minimum ### w ciągu doby, głownie przed południem. • Unikanie sytuacji prowokujących (długotrwałe pozostawanie w pozycji stojącej, nagłe zmiany pozycji ciała, nagłe przerywanie intensywnego wysiłku, silne bodźce stresowe). • Przestrzeganie higieny snu oraz regularnych posiłków. • W razie wystąpienia objawów przedomdleniowych - intensywna praca mięśni nóg: napinanie mięśni, krzyżowanie nóg, dreptanie w miejscu. • W razie pogorszenia samopoczucia: pozycja leżąca z uniesionymi nogami, ewentualnie siedząca z głową nisko między nogami.'
+    }
+];
 
 // Utility to find nearest numeric key as string
 function findNearestKey(target, keys) {
@@ -189,6 +396,17 @@ function computeAgeFromDOB(dateStr) {
     return years;
 }
 
+function getAgeYears() {
+    const dobVal = document.getElementById('dob').value;
+    const ageInputVal = document.getElementById('age').value;
+    if (dobVal) {
+        const ageVal = computeAgeFromDOB(dobVal);
+        document.getElementById('age').value = ageVal ? ageVal.toFixed(2) : '';
+        return ageVal;
+    }
+    return ageInputVal ? parseFloat(ageInputVal) : null;
+}
+
 // BMI and BSA calculations
 function computeBMI(weight, height) {
     if (!weight || !height) return null;
@@ -206,27 +424,149 @@ function computeZ(value, mean, sd) {
     return (value - mean) / sd;
 }
 
+function normalCdf(z) {
+    if (z == null || Number.isNaN(z)) return null;
+    const sign = z < 0 ? -1 : 1;
+    const x = Math.abs(z) / Math.sqrt(2);
+    const t = 1 / (1 + 0.3275911 * x);
+    const a1 = 0.254829592;
+    const a2 = -0.284496736;
+    const a3 = 1.421413741;
+    const a4 = -1.453152027;
+    const a5 = 1.061405429;
+    const erf = sign * (1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x));
+    return 0.5 * (1 + erf);
+}
+
+function formatZ(value) {
+    return value != null && !Number.isNaN(value) ? value.toFixed(2) : '';
+}
+
+function formatCentileFromZ(value) {
+    const cdf = normalCdf(value);
+    if (cdf == null) return '';
+    const centile = cdf * 100;
+    if (centile < 0.1) return '<0.1';
+    if (centile > 99.9) return '>99.9';
+    return centile.toFixed(1);
+}
+
+function getWaterNormMl(ageVal, gender) {
+    if (ageVal == null || Number.isNaN(ageVal)) return null;
+    if (ageVal < 0.5) return 700;
+    if (ageVal < 1) return 800;
+    if (ageVal < 4) return 1300;
+    if (ageVal < 7) return 1700;
+    if (ageVal < 10) return 1900;
+    if (ageVal < 13) return gender === 'female' ? 2100 : 2400;
+    if (ageVal < 16) return gender === 'female' ? 2200 : 3000;
+    if (ageVal < 18) return gender === 'female' ? 2300 : 3300;
+    return gender === 'female' ? 2700 : 3700;
+}
+
+function getTemplateText(template) {
+    const ageVal = getAgeYears();
+    const gender = document.getElementById('gender').value;
+    const waterNorm = getWaterNormMl(ageVal, gender);
+    return template.text.replace('###', waterNorm ? `${waterNorm} ml` : '### ml');
+}
+
+function stripNumbering(line) {
+    return line.replace(/^\s*\d+\.\s*/, '').trim();
+}
+
+function splitTextLines(text) {
+    return text.split('\n').map(line => stripNumbering(line)).filter(Boolean);
+}
+
+function renumberRecommendations() {
+    const textarea = document.getElementById('zalecenia');
+    const lines = splitTextLines(textarea.value);
+    textarea.value = lines.map((line, index) => `${index + 1}. ${line}`).join('\n');
+}
+
+function removeTemplateLines(lines, templateLines) {
+    const templateSet = new Set(templateLines);
+    return lines.filter(line => !templateSet.has(line));
+}
+
+function syncRecommendationTemplates(changedTemplate = null, isChecked = null) {
+    if (recommendationSyncInProgress) return;
+    recommendationSyncInProgress = true;
+    const textarea = document.getElementById('zalecenia');
+    let lines = splitTextLines(textarea.value);
+
+    if (changedTemplate) {
+        const templateLines = splitTextLines(getTemplateText(changedTemplate));
+        const previousTemplateLines = activeTemplateLines[changedTemplate.id] || [];
+        if (previousTemplateLines.length) {
+            lines = removeTemplateLines(lines, previousTemplateLines);
+        }
+        if (isChecked) {
+            const existing = new Set(lines);
+            templateLines.forEach(line => {
+                if (!existing.has(line)) {
+                    lines.push(line);
+                    existing.add(line);
+                }
+            });
+            activeTemplateLines[changedTemplate.id] = templateLines;
+        } else {
+            lines = removeTemplateLines(lines, templateLines);
+            delete activeTemplateLines[changedTemplate.id];
+        }
+    }
+
+    textarea.value = lines.map((line, index) => `${index + 1}. ${line}`).join('\n');
+    recommendationSyncInProgress = false;
+}
+
+function renderRecommendationTemplates() {
+    const container = document.getElementById('recommendationTemplates');
+    container.innerHTML = '';
+    recommendationTemplates.forEach(template => {
+        const label = document.createElement('label');
+        label.className = 'template-option';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = template.checked;
+        checkbox.dataset.templateId = template.id;
+        checkbox.addEventListener('change', () => {
+            template.checked = checkbox.checked;
+            syncRecommendationTemplates(template, checkbox.checked);
+        });
+
+        const text = document.createElement('span');
+        text.textContent = getTemplateText(template);
+
+        label.appendChild(checkbox);
+        label.appendChild(text);
+        container.appendChild(label);
+    });
+}
+
+function refreshDynamicTemplates() {
+    renderRecommendationTemplates();
+    document.querySelectorAll('#recommendationTemplates input[type="checkbox"]:checked').forEach(checkbox => {
+        const template = recommendationTemplates.find(item => item.id === checkbox.dataset.templateId);
+        if (template && template.id === 'vasovagal') {
+            syncRecommendationTemplates(template, true);
+        }
+    });
+}
+
 // Update BMI, BSA and growth z-scores
 function updateBMIandZScores() {
     const weightVal = parseFloat(document.getElementById('weight').value);
     const heightVal = parseFloat(document.getElementById('height').value);
-    let ageVal;
-    const dobVal = document.getElementById('dob').value;
-    const ageInputVal = document.getElementById('age').value;
-    if (dobVal) {
-        ageVal = computeAgeFromDOB(dobVal);
-        document.getElementById('age').value = ageVal ? ageVal.toFixed(2) : '';
-    } else if (ageInputVal) {
-        ageVal = parseFloat(ageInputVal);
-    } else {
-        ageVal = null;
-    }
+    const ageVal = getAgeYears();
     const gender = document.getElementById('gender').value;
     const bmi = computeBMI(weightVal, heightVal);
     const bsa = computeBSA(weightVal, heightVal);
     document.getElementById('bmi').textContent = bmi ? bmi.toFixed(2) : '';
     document.getElementById('bsa').textContent = bsa ? bsa.toFixed(2) : '';
-    let heightZ = '', weightZ = '', bmiZ = '';
+    let heightZ = null, weightZ = null, bmiZ = null;
     if (ageVal != null && gender && weightVal && heightVal) {
         const palKeys = Object.keys(palczData.data);
         if (palKeys.length > 0) {
@@ -239,11 +579,15 @@ function updateBMIandZScores() {
             bmiZ = computeZ(bmi, bmiMean, bmiSd);
         }
     }
-    document.getElementById('height_z').textContent = heightZ ? heightZ.toFixed(2) : '';
-    document.getElementById('weight_z').textContent = weightZ ? weightZ.toFixed(2) : '';
-    document.getElementById('bmi_z').textContent = bmiZ ? bmiZ.toFixed(2) : '';
+    document.getElementById('height_z').textContent = formatZ(heightZ);
+    document.getElementById('weight_z').textContent = formatZ(weightZ);
+    document.getElementById('bmi_z').textContent = formatZ(bmiZ);
+    document.getElementById('height_centile').textContent = formatCentileFromZ(heightZ);
+    document.getElementById('weight_centile').textContent = formatCentileFromZ(weightZ);
+    document.getElementById('bmi_centile').textContent = formatCentileFromZ(bmiZ);
     updateTapseNorm();
     updateMeasurementHighlight();
+    refreshDynamicTemplates();
 }
 
 // Populate normative echocardiographic ranges based on weight
@@ -320,14 +664,7 @@ function updateMeasurementHighlight() {
 // Update TAPSE normative info and z-score
 function updateTapseNorm() {
     const tapseVal = document.getElementById('tapseValue').value ? parseFloat(document.getElementById('tapseValue').value) : null;
-    let ageVal;
-    const dobVal = document.getElementById('dob').value;
-    const ageInputVal = document.getElementById('age').value;
-    if (dobVal) {
-        ageVal = computeAgeFromDOB(dobVal);
-    } else if (ageInputVal) {
-        ageVal = parseFloat(ageInputVal);
-    }
+    const ageVal = getAgeYears();
     const infoDiv = document.getElementById('tapse-norm-info');
     infoDiv.textContent = '';
     if (ageVal != null) {
@@ -345,57 +682,200 @@ function updateTapseNorm() {
     }
 }
 
-// Compile final report
-function generateReport() {
+function getInitials(name) {
+    const initials = name
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .map(part => part[0])
+        .join('')
+        .toUpperCase()
+        .replace(/[^A-ZĄĆĘŁŃÓŚŹŻ]/g, '');
+    return initials || 'NN';
+}
+
+function formatDateStamp(date = new Date()) {
+    const pad = value => String(value).padStart(2, '0');
+    return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}_${pad(date.getHours())}${pad(date.getMinutes())}`;
+}
+
+function getDownloadBaseName() {
     const name = document.getElementById('name').value;
-    const dob = document.getElementById('dob').value;
+    const dob = document.getElementById('dob').value || 'DOB';
+    return `${getInitials(name)}_${dob || 'DOB'}_ECHO_${formatDateStamp()}`;
+}
+
+function downloadBlob(content, filename, type) {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+}
+
+function csvEscape(value) {
+    const text = value == null ? '' : String(value);
+    return `"${text.replace(/"/g, '""')}"`;
+}
+
+function collectReportData() {
     const ageVal = document.getElementById('age').value;
     const genderLabel = document.getElementById('gender').value === 'male' ? 'chłopiec' : 'dziewczynka';
-    const weight = document.getElementById('weight').value;
-    const height = document.getElementById('height').value;
-    const bmi = document.getElementById('bmi').textContent;
-    const bsa = document.getElementById('bsa').textContent;
-    const height_z = document.getElementById('height_z').textContent;
-    const weight_z = document.getElementById('weight_z').textContent;
-    const bmi_z = document.getElementById('bmi_z').textContent;
-    const wywiad = document.getElementById('wywiad').value;
-    const badanie = document.getElementById('badanie').value;
-    const opisEcho = document.getElementById('opisEcho').value;
-    let echoResults = '';
     const weightKeys = Object.keys(normativeData.data);
     const weightInputVal = document.getElementById('weight').value;
+    const echoMeasurements = [];
     if (weightInputVal && weightKeys.length > 0) {
         const nearest = weightKeys.includes(weightInputVal.toString()) ? weightInputVal.toString() : findNearestKey(parseFloat(weightInputVal), weightKeys);
         const norms = normativeData.data[nearest];
         for (const param in norms) {
-            const meas = measuredValues[param];
-            const min = norms[param].min;
-            const max = norms[param].max;
-            echoResults += `${param}: ${meas != null ? meas : ''} mm (norma ${min}–${max})\n`;
+            echoMeasurements.push({
+                param,
+                measured: measuredValues[param] != null ? measuredValues[param] : '',
+                unit: 'mm',
+                norm_weight_kg: nearest,
+                norm_min: norms[param].min,
+                norm_avg: norms[param].avr,
+                norm_max: norms[param].max
+            });
         }
     }
-    // TAPSE result string
+
+    let tapse = {};
     const tapseVal = document.getElementById('tapseValue').value;
-    let tapseStr = '';
     if (ageVal) {
         const tapseKeys = Object.keys(tapseData.data);
         if (tapseKeys.length > 0) {
             const nearestAge = tapseKeys.includes(ageVal) ? ageVal : findNearestKey(parseFloat(ageVal), tapseKeys);
             const normsT = tapseData.data[nearestAge];
             const z = tapseVal ? computeZ(parseFloat(tapseVal), normsT.mean, normsT.sd) : null;
-            tapseStr = `TAPSE: ${tapseVal || ''} mm (norma ${normsT.min}–${normsT.max}, z-score: ${z != null ? z.toFixed(2) : ''})`;
+            tapse = {
+                value: tapseVal || '',
+                unit: 'mm',
+                norm_age_years: nearestAge,
+                norm_min: normsT.min,
+                norm_mean: normsT.mean,
+                norm_max: normsT.max,
+                z_score: formatZ(z)
+            };
         }
     }
+
+    return {
+        name: document.getElementById('name').value,
+        dob: document.getElementById('dob').value,
+        age: ageVal,
+        gender: genderLabel,
+        height: document.getElementById('height').value,
+        weight: document.getElementById('weight').value,
+        bmi: document.getElementById('bmi').textContent,
+        bsa: document.getElementById('bsa').textContent,
+        height_z: document.getElementById('height_z').textContent,
+        weight_z: document.getElementById('weight_z').textContent,
+        bmi_z: document.getElementById('bmi_z').textContent,
+        height_centile: document.getElementById('height_centile').textContent,
+        weight_centile: document.getElementById('weight_centile').textContent,
+        bmi_centile: document.getElementById('bmi_centile').textContent,
+        wywiad: document.getElementById('wywiad').value,
+        badanie: document.getElementById('badanie').value,
+        ekg: document.getElementById('ekg').value,
+        opisEcho: document.getElementById('opisEcho').value,
+        zalecenia: document.getElementById('zalecenia').value,
+        echoMeasurements,
+        tapse
+    };
+}
+
+// Compile final report
+function generateReport() {
+    renumberRecommendations();
+    const data = collectReportData();
+    const echoResults = data.echoMeasurements
+        .map(item => `${item.param}: ${item.measured} ${item.unit} (norma ${item.norm_min}–${item.norm_max})`)
+        .join('\n');
+    const tapseStr = data.tapse.value !== undefined
+        ? `TAPSE: ${data.tapse.value} mm (norma ${data.tapse.norm_min}–${data.tapse.norm_max}, z-score: ${data.tapse.z_score || ''})`
+        : '';
     let report = '';
-    report += `Pacjent: ${name}\nPłeć: ${genderLabel}\n`;
-    report += `Data urodzenia: ${dob || ''} • Wiek: ${ageVal || ''} lat\n`;
-    report += `Waga: ${weight || ''} kg (Z-score: ${weight_z || ''}) • Wzrost: ${height || ''} cm (Z-score: ${height_z || ''})\n`;
-    report += `BMI: ${bmi || ''} kg/m2 (z-score: ${bmi_z || ''}) • BSA: ${bsa || ''} m2\n\n`;
-    report += `WYWIAD:\n${wywiad}\n\n`;
-    report += `BADANIE:\n${badanie}\n\n`;
+    report += `Pacjent: ${data.name}\nPłeć: ${data.gender}\n`;
+    report += `Data urodzenia: ${data.dob || ''} • Wiek: ${data.age || ''} lat\n`;
+    report += `Wzrost: ${data.height || ''} cm (Z-score: ${data.height_z || ''}, centyl: ${data.height_centile || ''}) • Waga: ${data.weight || ''} kg (Z-score: ${data.weight_z || ''}, centyl: ${data.weight_centile || ''})\n`;
+    report += `BMI: ${data.bmi || ''} kg/m2 (Z-score: ${data.bmi_z || ''}, centyl: ${data.bmi_centile || ''}) • BSA: ${data.bsa || ''} m2\n\n`;
+    report += `WYWIAD:\n${data.wywiad}\n\n`;
+    report += `BADANIE:\n${data.badanie}\n\n`;
+    report += `EKG:\n${data.ekg}\n\n`;
     report += `Wyniki ECHO:\n${echoResults.trim()}\n${tapseStr}\n\n`;
-    report += `OPIS ECHO:\n${opisEcho}\n`;
+    report += `OPIS ECHO:\n${data.opisEcho}\n\n`;
+    report += `ZALECENIA:\n${data.zalecenia}\n`;
     document.getElementById('finalReport').value = report;
+    return report;
+}
+
+async function generateAndCopyReport() {
+    const report = generateReport();
+    await navigator.clipboard.writeText(report);
+}
+
+function buildCsv() {
+    generateReport();
+    const data = collectReportData();
+    const rows = [
+        ['section', 'field', 'value', 'unit', 'norm_context', 'norm_min', 'norm_mean', 'norm_max', 'z_score', 'centile']
+    ];
+    rows.push(['patient', 'name', data.name, '', '', '', '', '', '', '']);
+    rows.push(['patient', 'dob', data.dob, '', '', '', '', '', '', '']);
+    rows.push(['patient', 'age', data.age, 'years', '', '', '', '', '', '']);
+    rows.push(['patient', 'gender', data.gender, '', '', '', '', '', '', '']);
+    rows.push(['anthropometry', 'height', data.height, 'cm', '', '', '', '', data.height_z, data.height_centile]);
+    rows.push(['anthropometry', 'weight', data.weight, 'kg', '', '', '', '', data.weight_z, data.weight_centile]);
+    rows.push(['anthropometry', 'BMI', data.bmi, 'kg/m2', '', '', '', '', data.bmi_z, data.bmi_centile]);
+    rows.push(['anthropometry', 'BSA', data.bsa, 'm2', '', '', '', '', '', '']);
+    data.echoMeasurements.forEach(item => {
+        rows.push(['echo_measurement', item.param, item.measured, item.unit, `weight ${item.norm_weight_kg} kg`, item.norm_min, item.norm_avg, item.norm_max, '', '']);
+    });
+    if (data.tapse.value !== undefined) {
+        rows.push(['echo_measurement', 'TAPSE', data.tapse.value, data.tapse.unit, `age ${data.tapse.norm_age_years} years`, data.tapse.norm_min, data.tapse.norm_mean, data.tapse.norm_max, data.tapse.z_score, '']);
+    }
+    rows.push(['text', 'wywiad', data.wywiad, '', '', '', '', '', '', '']);
+    rows.push(['text', 'badanie', data.badanie, '', '', '', '', '', '', '']);
+    rows.push(['text', 'ekg', data.ekg, '', '', '', '', '', '', '']);
+    rows.push(['text', 'opis_echo', data.opisEcho, '', '', '', '', '', '', '']);
+    rows.push(['text', 'zalecenia', data.zalecenia, '', '', '', '', '', '', '']);
+    rows.push(['text', 'final_report', document.getElementById('finalReport').value, '', '', '', '', '', '', '']);
+    return rows.map(row => row.map(csvEscape).join(',')).join('\n');
+}
+
+function downloadTxt() {
+    const report = generateReport();
+    downloadBlob(report, `${getDownloadBaseName()}.txt`, 'text/plain;charset=utf-8');
+}
+
+function downloadCsv() {
+    const csv = buildCsv();
+    downloadBlob(csv, `${getDownloadBaseName()}.csv`, 'text/csv;charset=utf-8');
+}
+
+function applyTheme(theme) {
+    document.body.dataset.theme = theme;
+    document.getElementById('themeToggle').textContent = theme === 'dark' ? 'Tryb jasny' : 'Tryb ciemny';
+    localStorage.setItem('echo-report-theme', theme);
+}
+
+function initTheme() {
+    applyTheme(localStorage.getItem('echo-report-theme') || 'dark');
+}
+
+function initRecommendations() {
+    renderRecommendationTemplates();
+    const defaultTemplate = recommendationTemplates.find(template => template.checked);
+    if (defaultTemplate) {
+        syncRecommendationTemplates(defaultTemplate, true);
+    } else {
+        renumberRecommendations();
+    }
 }
 
 // Event listeners
@@ -405,16 +885,26 @@ document.getElementById('gender').addEventListener('change', updateBMIandZScores
 document.getElementById('weight').addEventListener('input', () => { updateBMIandZScores(); updateWeightNorms(); });
 document.getElementById('height').addEventListener('input', updateBMIandZScores);
 document.getElementById('tapseValue').addEventListener('input', updateTapseNorm);
+document.getElementById('zalecenia').addEventListener('blur', renumberRecommendations);
 document.getElementById('generateReport').addEventListener('click', generateReport);
+document.getElementById('generateAndCopy').addEventListener('click', generateAndCopyReport);
+document.getElementById('downloadTxt').addEventListener('click', downloadTxt);
+document.getElementById('downloadCsv').addEventListener('click', downloadCsv);
+document.getElementById('themeToggle').addEventListener('click', () => {
+    applyTheme(document.body.dataset.theme === 'dark' ? 'light' : 'dark');
+});
 
 // Initialize normative table on load
 window.addEventListener('load', () => {
+    initTheme();
+    initRecommendations();
+    updateBMIandZScores();
     updateWeightNorms();
 });
 </script>
-    <div>
+    <footer>
         Not for clinical use.<br>
         Concept and development: JMS
-    </div>
+    </footer>
 </body>
 </html>
