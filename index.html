@@ -145,6 +145,9 @@
             border-radius: 4px;
             padding: 5px;
         }
+        td input[type="checkbox"] {
+            width: auto;
+        }
         .norm-row.out-of-range {
             background-color: var(--danger);
             outline: 1px solid var(--danger-border);
@@ -349,6 +352,32 @@ Neguje omdlenia, zasłabnięcia, bóle w klatce piersiowej, kołatania serca. Wy
     <h2>Badanie</h2>
     <textarea id="badanie" rows="3">Stan ogólny dobry. Sinica (-), duszność (-), obrzęki (-), szmer (-), tętno udowe (+), wątroba (-), śledziona (-), płuca (-), infekcja (-), gorączka (-).</textarea>
     <h2>EKG</h2>
+    <table id="ekgMetricsTable" class="small-table">
+        <thead>
+            <tr>
+                <th>HR [/min]</th>
+                <th>PQ [ms]</th>
+                <th>QRS alfa [st]</th>
+                <th>Oś</th>
+                <th>QRS [ms]</th>
+                <th>QT [ms]</th>
+                <th>QTc [ms]</th>
+                <th>Prawidłowe</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><input type="number" id="ekg_hr" step="1" min="1" /></td>
+                <td><input type="number" id="ekg_pq" step="1" min="0" /></td>
+                <td><input type="number" id="ekg_axis" step="1" min="-180" max="180" /></td>
+                <td><input type="text" id="ekg_axis_class" readonly tabindex="-1" /></td>
+                <td><input type="number" id="ekg_qrs" step="1" min="0" /></td>
+                <td><input type="number" id="ekg_qt" step="1" min="0" /></td>
+                <td><input type="text" id="ekg_qtc" readonly tabindex="-1" /></td>
+                <td><input type="checkbox" id="ekg_normal" /></td>
+            </tr>
+        </tbody>
+    </table>
     <textarea id="ekg" rows="3">Rytm zatokowy, miarowy /min, oś pośrednia st, PQ ms, QRS ms, QT/QTc ms. QTc i ST-T w normie. Krzywa w normie.</textarea>
     <h2>Opis ECHO</h2>
     <textarea id="opisEcho" rows="4">Ułożenie trzewi prawidłowe. Osierdzie wolne. 
@@ -405,6 +434,8 @@ let activeInfantInterviewLine = false;
 const DEFAULT_EKG_TEXT = 'Rytm zatokowy, miarowy /min, oś pośrednia st, PQ ms, QRS ms, QT/QTc ms. QTc i ST-T w normie. Krzywa w normie.';
 const DEFAULT_MEDICATIONS_TEXT = 'nie przyjmuje';
 const INFANT_INTERVIEW_LINE = 'C P SN w HBD bez powikłań. M.ur. g, Apgar . Zjada chętnie, nie męczy się.';
+const EKG_NORMAL_CONCLUSION = 'Wn: Zapis prawidłowy';
+const EKG_HR_WARNING = 'Uwaga: HR poza rekomendowanym zakresem 60–100/min; QTc wg Bazetta może być mniej wiarygodne.';
 
 const referralReasonOptions = [
     { id: 'murmur', text: 'szmer nad sercem w badaniu pediatrycznym', checked: true },
@@ -760,19 +791,53 @@ function computeTeichholz() {
     if (lvedv == null || lvesv == null || lvedv === 0) return null;
     const sv = lvedv - lvesv;
     const lvef = (sv / lvedv) * 100;
+    const ivs = measuredValues.IVS;
+    const lvpw = measuredValues.LVPW;
+    const bsa = parseFloat(document.getElementById('bsa').textContent);
+    const heightM = parseFloat(document.getElementById('height').value) / 100;
+    let lvm = null;
+    let lvmi = null;
+    let lvmih = null;
+
+    if (ivs && lvpw) {
+        const lvdDCm = lvdD / 10;
+        const ivsCm = ivs / 10;
+        const lvpwCm = lvpw / 10;
+        lvm = 0.8 * (1.04 * (Math.pow(lvdDCm + ivsCm + lvpwCm, 3) - Math.pow(lvdDCm, 3))) + 0.6;
+        lvmi = bsa ? lvm / bsa : null;
+        lvmih = heightM ? lvm / Math.pow(heightM, 2.7) : null;
+    }
+
     return {
         lvedv: Math.round(lvedv),
         lvesv: Math.round(lvesv),
         sv: Math.round(sv),
-        lvef: Math.round(lvef)
+        lvef: Math.round(lvef),
+        lvm: lvm != null ? Math.round(lvm) : null,
+        lvmi: lvmi != null ? Number(lvmi.toFixed(1)) : null,
+        lvmih: lvmih != null ? Number(lvmih.toFixed(1)) : null
     };
+}
+
+function formatCardiacCalculations(result) {
+    if (!result) return '';
+    const values = [
+        `Teichholz: LVEDV ${result.lvedv} ml`,
+        `LVESV ${result.lvesv} ml`,
+        `SV ${result.sv} ml`,
+        `LVEF ${result.lvef}%`
+    ];
+    if (result.lvm != null) {
+        values.push(`ASE: LVM ${result.lvm} g`);
+        if (result.lvmi != null) values.push(`LVMi ${result.lvmi} g/m2`);
+        if (result.lvmih != null) values.push(`LVMih ${result.lvmih} g/m2.7`);
+    }
+    return values.join(', ');
 }
 
 function updateTeichholzInfo() {
     const result = computeTeichholz();
-    document.getElementById('teichholz-info').textContent = result
-        ? `Teichholz: LVEDV ${result.lvedv} ml, LVESV ${result.lvesv} ml, SV ${result.sv} ml, LVEF ${result.lvef}%`
-        : '';
+    document.getElementById('teichholz-info').textContent = formatCardiacCalculations(result);
 }
 
 function updateDopplerPg() {
@@ -793,6 +858,119 @@ function collectDopplerData() {
             pgValue
         };
     }).filter(item => item.value);
+}
+
+function formatDopplerReport(items) {
+    const byId = Object.fromEntries(items.map(item => [item.id, item]));
+    const lines = [];
+
+    ['av_vmax', 'pv_vmax'].forEach(id => {
+        const item = byId[id];
+        if (!item) return;
+        const pg = item.pgValue ? `, PG ${item.pgValue} mmHg` : '';
+        lines.push(`${item.label}: ${item.value} ${item.unit}${pg}`);
+    });
+
+    const mvE = byId.mv_e?.value;
+    const mvA = byId.mv_a?.value;
+    if (mvE || mvA) lines.push(`MV e/a: ${mvE || '-'}/${mvA || '-'} m/s`);
+
+    const tvE = byId.tv_e?.value;
+    const tvA = byId.tv_a?.value;
+    if (tvE || tvA) lines.push(`TV e/a: ${tvE || '-'}/${tvA || '-'} m/s`);
+
+    const ti = byId.ti_vmax;
+    if (ti) {
+        const pg = ti.pgValue ? `, PG ${ti.pgValue} mmHg` : '';
+        lines.push(`${ti.label}: ${ti.value} ${ti.unit}${pg}`);
+    }
+
+    return lines.join('\n');
+}
+
+function classifyQrsAxis(axis) {
+    if (axis == null || Number.isNaN(axis)) return 'pośrednia';
+    if (axis < -90) return 'lewogram patologiczny';
+    if (axis < -30) return 'lewogram';
+    if (axis > 90) return 'prawogram';
+    return 'pośrednia';
+}
+
+function computeBazettQtc(qtMs, heartRate) {
+    if (!qtMs || !heartRate) return null;
+    const rrSeconds = 60 / heartRate;
+    return Math.round(qtMs / Math.sqrt(rrSeconds));
+}
+
+function removeGeneratedSentence(text, sentence) {
+    return text
+        .replace(sentence, '')
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
+function appendGeneratedSentence(text, sentence, enabled) {
+    const withoutSentence = removeGeneratedSentence(text, sentence);
+    return enabled ? `${withoutSentence}${withoutSentence ? ' ' : ''}${sentence}` : withoutSentence;
+}
+
+function collectEkgMetrics() {
+    const heartRate = parseFloat(document.getElementById('ekg_hr').value);
+    const pq = parseFloat(document.getElementById('ekg_pq').value);
+    const axis = parseFloat(document.getElementById('ekg_axis').value);
+    const qrs = parseFloat(document.getElementById('ekg_qrs').value);
+    const qt = parseFloat(document.getElementById('ekg_qt').value);
+    const qtc = computeBazettQtc(qt, heartRate);
+    return {
+        heartRate: Number.isNaN(heartRate) ? null : heartRate,
+        pq: Number.isNaN(pq) ? null : pq,
+        axis: Number.isNaN(axis) ? null : axis,
+        axisClass: classifyQrsAxis(axis),
+        qrs: Number.isNaN(qrs) ? null : qrs,
+        qt: Number.isNaN(qt) ? null : qt,
+        qtc,
+        normal: document.getElementById('ekg_normal').checked
+    };
+}
+
+function formatEchoMeasurementReport(item) {
+    const zScore = item.z_score ? `, z-score: ${item.z_score}` : '';
+    const flag = item.flag ? ` ${item.flag}` : '';
+    return `${item.param}: ${item.measured} ${item.unit} (norma ${item.norm_min}–${item.norm_max}${zScore})${flag}`;
+}
+
+function updateEkgDescription() {
+    const metrics = collectEkgMetrics();
+    const textarea = document.getElementById('ekg');
+    let text = textarea.value || DEFAULT_EKG_TEXT;
+    const heartRateText = metrics.heartRate != null ? metrics.heartRate : '';
+    const axisText = metrics.axis != null ? ` ${metrics.axis}` : '';
+    const pqText = metrics.pq != null ? metrics.pq : '';
+    const qrsText = metrics.qrs != null ? metrics.qrs : '';
+    const qtQtcText = metrics.qt != null
+        ? `${metrics.qt}${metrics.qtc != null ? `/${metrics.qtc}` : '/'}`
+        : '';
+
+    text = text.replace(/miarowy\s*[^,]*\/min/, `miarowy ${heartRateText}/min`);
+    text = text.replace(
+        /oś\s+(?:lewogram patologiczny|pośrednia|lewogram|prawogram)(?:\s*[-+]?\d+(?:[.,]\d+)?)?\s*st/,
+        `oś ${metrics.axisClass}${axisText} st`
+    );
+    text = text.replace(/PQ\s*(?:\d+(?:[.,]\d+)?)?\s*ms/, `PQ ${pqText} ms`);
+    text = text.replace(/QRS\s*(?:\d+(?:[.,]\d+)?)?\s*ms/, `QRS ${qrsText} ms`);
+    text = text.replace(
+        /QT\/QTc\s*(?:\d+(?:[.,]\d+)?(?:\/\d*(?:[.,]\d+)?)?)?\s*ms/,
+        `QT/QTc ${qtQtcText} ms`
+    );
+
+    const heartRateOutsideRange = metrics.heartRate != null && (metrics.heartRate < 60 || metrics.heartRate > 100);
+    text = appendGeneratedSentence(text, EKG_HR_WARNING, heartRateOutsideRange);
+    text = appendGeneratedSentence(text, EKG_NORMAL_CONCLUSION, metrics.normal);
+
+    document.getElementById('ekg_axis_class').value = metrics.axisClass;
+    document.getElementById('ekg_qtc').value = metrics.qtc ?? '';
+    textarea.value = text;
 }
 
 // Update BMI, BSA and growth z-scores
@@ -827,6 +1005,7 @@ function updateBMIandZScores() {
     updateInfantInterviewLine();
     updateTapseNorm();
     updateMeasurementHighlight();
+    updateTeichholzInfo();
     refreshDynamicTemplates();
 }
 
@@ -1047,6 +1226,7 @@ function collectReportData() {
         badanie: document.getElementById('badanie').value,
         ekg: document.getElementById('ekg').value,
         ekgChanged: normalizeText(document.getElementById('ekg').value) !== normalizeText(DEFAULT_EKG_TEXT),
+        ekgMetrics: collectEkgMetrics(),
         opisEcho: document.getElementById('opisEcho').value,
         zalecenia: document.getElementById('zalecenia').value,
         echoMeasurements,
@@ -1059,17 +1239,13 @@ function collectReportData() {
 function generateReport() {
     renumberRecommendations();
     updateDopplerPg();
+    updateEkgDescription();
     const data = collectReportData();
     const echoResults = data.echoMeasurements
-        .map(item => `${item.param}: ${item.measured} ${item.unit}${item.flag ? ` ${item.flag}` : ''} (norma ${item.norm_min}–${item.norm_max}${item.z_score ? `, z-score: ${item.z_score}` : ''})`)
+        .map(formatEchoMeasurementReport)
         .join('\n');
-    const teichholzStr = data.teichholz
-        ? `Teichholz: LVEDV ${data.teichholz.lvedv} ml, LVESV ${data.teichholz.lvesv} ml, SV ${data.teichholz.sv} ml, LVEF ${data.teichholz.lvef}%`
-        : '';
-    const dopplerStr = data.doppler.map(item => {
-        const pg = item.pgValue ? `, PG ${item.pgValue} mmHg` : '';
-        return `${item.label}: ${item.value} ${item.unit}${pg}`;
-    }).join('\n');
+    const teichholzStr = formatCardiacCalculations(data.teichholz);
+    const dopplerStr = formatDopplerReport(data.doppler);
     let report = '';
     report += `Pacjent: ${data.name}\nPłeć: ${data.gender}\n`;
     report += `Data urodzenia: ${data.dob || ''} • Wiek: ${data.age || ''} lat\n`;
@@ -1121,6 +1297,11 @@ function buildCsv() {
         rows.push(['calculated', 'LVESV', data.teichholz.lvesv, 'ml', 'Teichholz', '', '', '', '', '', '']);
         rows.push(['calculated', 'SV', data.teichholz.sv, 'ml', 'Teichholz', '', '', '', '', '', '']);
         rows.push(['calculated', 'LVEF', data.teichholz.lvef, '%', 'Teichholz', '', '', '', '', '', '']);
+        if (data.teichholz.lvm != null) {
+            rows.push(['calculated', 'LVM', data.teichholz.lvm, 'g', 'ASE', '', '', '', '', '', '']);
+            rows.push(['calculated', 'LVMi', data.teichholz.lvmi, 'g/m2', 'ASE/BSA', '', '', '', '', '', '']);
+            rows.push(['calculated', 'LVMih', data.teichholz.lvmih, 'g/m2.7', 'ASE/height^2.7', '', '', '', '', '', '']);
+        }
     }
     data.doppler.forEach(item => {
         rows.push(['doppler', item.label, item.value, item.unit, '', '', '', item.pgValue ? `PG ${item.pgValue} mmHg` : '', '', '', '']);
@@ -1128,6 +1309,13 @@ function buildCsv() {
     rows.push(['text', 'wywiad', data.wywiad, '', '', '', '', '', '', '', '']);
     rows.push(['text', 'leki', data.leki, '', '', '', '', '', '', '', '']);
     rows.push(['text', 'badanie', data.badanie, '', '', '', '', '', '', '', '']);
+    rows.push(['ekg', 'HR', data.ekgMetrics.heartRate ?? '', '/min', '', '', '', '', '', '', '']);
+    rows.push(['ekg', 'PQ', data.ekgMetrics.pq ?? '', 'ms', '', '', '', '', '', '', '']);
+    rows.push(['ekg', 'QRS_axis', data.ekgMetrics.axis ?? '', 'st', data.ekgMetrics.axisClass, '', '', '', '', '', '']);
+    rows.push(['ekg', 'QRS', data.ekgMetrics.qrs ?? '', 'ms', '', '', '', '', '', '', '']);
+    rows.push(['ekg', 'QT', data.ekgMetrics.qt ?? '', 'ms', '', '', '', '', '', '', '']);
+    rows.push(['ekg', 'QTc_Bazett', data.ekgMetrics.qtc ?? '', 'ms', '', '', '', '', '', '', '']);
+    rows.push(['ekg', 'normal', data.ekgMetrics.normal, '', '', '', '', '', '', '', '']);
     rows.push(['text', 'ekg', data.ekg, '', '', '', '', '', '', '', '']);
     rows.push(['text', 'opis_echo', data.opisEcho, '', '', '', '', '', '', '', '']);
     rows.push(['text', 'zalecenia', data.zalecenia, '', '', '', '', '', '', '', '']);
@@ -1176,6 +1364,14 @@ function initDoppler() {
     });
 }
 
+function initEkgMetrics() {
+    ['ekg_hr', 'ekg_pq', 'ekg_axis', 'ekg_qrs', 'ekg_qt'].forEach(id => {
+        document.getElementById(id).addEventListener('input', updateEkgDescription);
+    });
+    document.getElementById('ekg_normal').addEventListener('change', updateEkgDescription);
+    updateEkgDescription();
+}
+
 // Event listeners
 document.getElementById('dob').addEventListener('change', () => { updateBMIandZScores(); updateWeightNorms(); });
 document.getElementById('age').addEventListener('input', () => { updateBMIandZScores(); updateWeightNorms(); });
@@ -1197,6 +1393,7 @@ window.addEventListener('load', () => {
     initTheme();
     renderReferralReasons();
     initDoppler();
+    initEkgMetrics();
     initRecommendations();
     updateBMIandZScores();
     updateWeightNorms();
